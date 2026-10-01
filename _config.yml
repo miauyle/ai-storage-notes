@@ -48,7 +48,7 @@ docsteer:
     cdn_integrity: ""
 
   logo: /assets/images/logo.svg
-  favicon: /assets/images/favicon.svg
+  favicon: /assets/images/favicon-storage.svg
 
   footer:
     show_credit: false
