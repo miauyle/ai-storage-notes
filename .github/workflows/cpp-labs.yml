@@ -37,3 +37,15 @@ jobs:
           JEKYLL_ENV: production
       - name: Check rendered documentation links and anchors
         run: python3 scripts/check_site_links.py _site /ai-storage-notes
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Browser brand verification
+        env:
+          BASEURL: /ai-storage-notes
+          EXPECTED_LOGO: logo-theme.svg
+          EXPECTED_FAVICON: favicon-storage.svg
+        run: |
+          npm install --prefix "$RUNNER_TEMP/brand-ui" --no-audit --no-fund --ignore-scripts playwright@1.51.1
+          "$RUNNER_TEMP/brand-ui/node_modules/.bin/playwright" install --with-deps chromium
+          NODE_PATH="$RUNNER_TEMP/brand-ui/node_modules" node scripts/check_brand_ui.cjs
