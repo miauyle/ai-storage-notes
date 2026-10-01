@@ -8,6 +8,8 @@ const siteRoot = path.resolve(__dirname, '../_site');
 const baseurl = process.env.BASEURL;
 const expectedLogo = process.env.EXPECTED_LOGO;
 const expectedFavicon = process.env.EXPECTED_FAVICON;
+const expectedGroups = Number(process.env.EXPECTED_GROUPS || 0);
+const expectedTopics = Number(process.env.EXPECTED_TOPICS || 0);
 
 if (!baseurl || !expectedLogo || !expectedFavicon) {
   throw new Error('BASEURL, EXPECTED_LOGO and EXPECTED_FAVICON are required');
@@ -45,6 +47,12 @@ const root = 'http://127.0.0.1:8765' + baseurl;
     const response = await page.goto(root + '/', { waitUntil: 'networkidle' });
     assert.equal(response.status(), 200);
 
+    assert.equal(await page.locator('.knowledge-home').count(), 1, 'knowledge map homepage exists');
+    if (expectedGroups) assert.equal(await page.locator('.knowledge-group').count(), expectedGroups, 'knowledge group count');
+    if (expectedTopics) assert.equal(await page.locator('.knowledge-topic').count(), expectedTopics, 'core topic count');
+    assert.equal(await page.locator('.knowledge-groups').evaluate(node => getComputedStyle(node).display), 'grid');
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'desktop page overflow');
+
     const brandLogo = page.locator('.navbar .brand__logo');
     assert.equal(await brandLogo.count(), 1, 'navbar brand logo exists');
     assert.match(await brandLogo.getAttribute('src'), new RegExp(expectedLogo.replace('.', '\\.') + '$'));
@@ -62,6 +70,9 @@ const root = 'http://127.0.0.1:8765' + baseurl;
 
     const violetBackground = await brandLogo.evaluate(node => getComputedStyle(node).backgroundImage);
     assert.notEqual(violetBackground, initialBackground, 'brand logo follows active skin');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'mobile page overflow');
 
     console.log(JSON.stringify({
       ok: true,
