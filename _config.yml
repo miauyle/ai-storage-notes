@@ -47,7 +47,7 @@ docsteer:
     cdn_url: "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
     cdn_integrity: ""
 
-  logo: /assets/images/logo.svg
+  logo: /assets/images/logo-theme.svg
   favicon: /assets/images/favicon-storage.svg
 
   footer:
