@@ -1,0 +1,37 @@
+groups:
+  - id: start
+    title: 从这里开始
+    pages:
+      - title: 如何使用本教程
+        url: /docs/00_Study_Guide/
+        summary: 时间预算、30 天安排、JD 分流与停止线
+      - title: 闭卷诊断与追问
+        url: /docs/00_Interview_Drills/
+        summary: 先暴露薄弱点，再回到对应机制和系统设计
+  - id: kv-cache
+    title: KV Cache 与分层
+    pages:
+      - title: AI Storage 与 KV Cache
+        url: /docs/01_AI_Storage_KV_Cache/
+        summary: 容量、分页、复用、重算与冷 Prefix 分层
+  - id: gpu-path
+    title: GPU 数据路径
+    pages:
+      - title: GPU Data Path
+        url: /docs/02_GPU_Data_Path/
+        summary: CUDA、RDMA、GPUDirect、GDS 与 S3 数据搬运边界
+  - id: system-design
+    title: 系统设计与恢复
+    pages:
+      - title: 系统设计与面试指南
+        url: /docs/03_System_Design_Interview_Demo/
+        summary: 从冷 KV 恢复到 GPU Ready 的预算、故障与一致性
+  - id: labs-evidence
+    title: 实验与证据
+    pages:
+      - title: 最小 C++ 数据路径实验
+        url: /docs/04_CPP_Labs/
+        summary: ownership、异步生命周期、Range 校验与错误修复
+      - title: 技术来源与版本
+        url: /SOURCES.html
+        summary: 快速变化技术的官方来源与版本边界

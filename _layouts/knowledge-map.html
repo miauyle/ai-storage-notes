@@ -1,0 +1,53 @@
+---
+layout: default
+---
+<div class="knowledge-home">
+  <header class="knowledge-intro">
+    <p class="knowledge-eyebrow">AI Storage Data Path Map</p>
+    <h1>AI Storage Notes</h1>
+    <p class="knowledge-lead">从对象存储走向 KV Cache、GPU Data Path 与高性能 AI 数据路径。</p>
+    <p>沿数据从对象存储进入 Host / GPU，再到缓存复用、失败恢复与系统设计，理解每一层为什么存在、瓶颈在哪里，以及工程上如何取舍。</p>
+    <div class="knowledge-actions">
+      <a class="btn btn--primary" href="{{ '/docs/00_Study_Guide/' | relative_url }}">阅读使用指南 <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+      <button class="btn btn--ghost" type="button" data-search-open><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> 搜索知识库 <kbd>/</kbd></button>
+      <a href="{{ '/docs/00_Interview_Drills/' | relative_url }}">先做闭卷诊断</a>
+      <a href="#core-topics">核心专题</a>
+    </div>
+  </header>
+
+  <section aria-labelledby="knowledge-map" class="knowledge-section">
+    <div class="knowledge-section-head"><h2 id="knowledge-map">数据路径地图</h2><p>五个相互连接的视角，把 workload、缓存、对象存储、GPU 数据搬运与系统设计串成一条路径。</p></div>
+    <div class="knowledge-root"><i class="fa-solid fa-diagram-project" aria-hidden="true"></i> AI Storage Notes <span>→ 五个知识分组</span></div>
+    <nav class="knowledge-overview" aria-label="知识分组快速定位">
+      {% for group in site.data.knowledge_map.groups %}<a href="#group-{{ group.id }}"><span aria-hidden="true">{{ forloop.index | prepend: '0' }}</span>{{ group.title }}</a>{% endfor %}
+    </nav>
+    <ol class="knowledge-groups">
+      {% for group in site.data.knowledge_map.groups %}
+      <li class="knowledge-group" id="group-{{ group.id }}">
+        <header><span class="knowledge-number" aria-hidden="true">{{ forloop.index | prepend: '0' }}</span><h3>{{ group.title }}</h3></header>
+        <ul>
+          {% for item in group.pages %}
+          <li><a href="{{ item.url | relative_url }}">{{ item.title }}</a><p>{{ item.summary }}</p></li>
+          {% endfor %}
+        </ul>
+      </li>
+      {% endfor %}
+    </ol>
+    <p class="knowledge-connection">AI workload 决定缓存价值与容量模型，对象存储承接冷数据与持久化，Host / RDMA / GPUDirect 决定搬运路径，最终还要落到可恢复、可观测、可解释的系统设计。<a href="{{ '/docs/03_System_Design_Interview_Demo/' | relative_url }}">进入端到端系统设计 →</a></p>
+  </section>
+
+  <section aria-labelledby="core-topics" class="knowledge-section">
+    <div class="knowledge-section-head"><h2 id="core-topics">核心专题</h2><p>直接进入面试最需要建立数据路径直觉的机制与工程问题。</p></div>
+    <div class="knowledge-topics">
+      {% for topic in site.data.core_topics %}
+      <a class="knowledge-topic" href="{{ topic.url | relative_url }}"><strong>{{ topic.title }}</strong><span>{{ topic.text }}</span><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>
+      {% endfor %}
+    </div>
+  </section>
+
+  <nav class="knowledge-resources" aria-label="相关入口">
+    <a href="{{ '/updates/' | relative_url }}">更新归档</a>
+    <a href="{{ '/SOURCES.html' | relative_url }}">技术来源与版本</a>
+    <a href="https://github.com/miauyle/ai-storage-notes">GitHub <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>
+  </nav>
+</div>

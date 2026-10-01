@@ -1,0 +1,24 @@
+- title: KV Cache
+  url: /docs/01_AI_Storage_KV_Cache/
+  text: 容量、分页、Prefix 复用与冷层取舍
+- title: Object Storage
+  url: /docs/01_AI_Storage_KV_Cache/
+  text: S3 冷层、对象布局与持久化边界
+- title: GPU Data Path
+  url: /docs/02_GPU_Data_Path/
+  text: Host / GPU 搬运路径与 CPU 参与度
+- title: RDMA
+  url: /docs/02_GPU_Data_Path/
+  text: 注册、完成语义与远端数据路径
+- title: GPUDirect / GDS
+  url: /docs/02_GPU_Data_Path/
+  text: 减少复制时仍需处理的拓扑与生命周期
+- title: System Design
+  url: /docs/03_System_Design_Interview_Demo/
+  text: 端到端预算、失败恢复与可观测性
+- title: C++ Labs
+  url: /docs/04_CPP_Labs/
+  text: 用最小实验验证数据路径基本契约
+- title: Interview Drills
+  url: /docs/00_Interview_Drills/
+  text: 闭卷诊断、追问链与复测
