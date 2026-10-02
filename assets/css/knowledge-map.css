@@ -45,3 +45,24 @@
   .knowledge-section { margin-top: var(--sp-4); }
   .knowledge-group { padding: var(--sp-4); }
 }
+
+/* Wide desktop: use 27-inch 2K/4K space without stretching body text too far. */
+@media (min-width: 1440px) {
+  :root {
+    --fs-root: 17px;
+    --shell-max: 1640px;
+    --sidebar-w: 300px;
+    --toc-w: 248px;
+    --content-max: 900px;
+    --measure: 76ch;
+  }
+
+  .knowledge-home { max-width: 1480px; }
+
+  .sidebar__search,
+  .sidebar__link,
+  .toc { font-size: .875rem; }
+
+  .sidebar__group-title,
+  .toc__title { font-size: .8rem; }
+}
