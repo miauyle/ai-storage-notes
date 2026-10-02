@@ -6,7 +6,7 @@ description: 从可运行的 ownership、异步生命周期练习走到只读 S3
 
 # Java 开发者的最小 C++ 数据路径实验
 
-这不是完整 C++ 课程，也不是完整 GPU KV Demo。你要交付的是：**自己编译、自己改一个条件、解释资源由谁持有，以及给出一次正确性验证。** 主程序全部是 C++17；Python 只用于本地 HTTP 测试 fixture，不承担数据路径。
+这不是完整 C++ 课程，也不是完整 GPU KV Demo。你要交付的是：**自己编译、自己改一个条件、解释资源由谁持有，以及给出一次正确性验证。** 数据路径与状态机是 C++17；Python 用于计算模型、本地 HTTP fixture、扫描与结果验证，不承担 payload 数据路径。不改写 Dell ECS/ObjectScale 3 年 10 个月的 Java/Go/Python 主力经历；C++ 是当前转型练习。
 
 | 实验 | 先读 | 通过标准 |
 |---|---|---|
@@ -30,7 +30,7 @@ cmake --build build/cpp-labs --parallel 2
 ctest --test-dir build/cpp-labs --output-on-failure
 ```
 
-`-S` 指源码目录，`-B` 指独立构建目录；CMake target 表示一个程序及其依赖，链接线程库和 libcurl 不等于安装 GPU 驱动。CTest 的两个测试分别覆盖 ownership/异步 CPU 任务与本地 HTTP 协议契约。
+`-S` 指源码目录，`-B` 指独立构建目录；CMake target 表示一个程序及其依赖，链接线程库和 libcurl 不等于安装 GPU 驱动。CTest 的五个测试套件覆盖 ownership、Range 契约、A 公式、B 有界流水、C 故障不变量。无需 GPU、RNIC 或 S3 credentials；Python 测试不要加 `-O`，以保留独立 trace 断言。
 
 若 curl 开发包暂不可用，先用 `-DBUILD_S3_PROBE=OFF` 配置，完成实验 1/2。无 CMake 时也能验证第一个程序：
 
@@ -142,14 +142,35 @@ fixture 使用位置相关的非密码学生成器，并逐字节比较预期切
 
 **自己改：**改变 offset/length，预测请求终点；解释 `start + length - 1` 和边界检查。再给测试服务器增加一个错误响应，确认程序不会误报成功。能够改动和解释，才算你的动手证据。
 
-## 4. 与 Demo M0/M1 的关系
+<a id="cpp-demo-evidence"></a>
+
+## 4. A/B/C 运行入口与 Demo M0/M1 边界
+
+按 §0 构建后，从仓库根目录运行（`build/cpp-labs` 可替换为自己的构建目录）：
+
+```bash
+# A：参数扫描/CSV；是 estimated performance decision model，不是 GPU benchmark。
+python3 examples/cpp-data-path/restore_recompute.py --tokens 2048 8192 32768 --bandwidth-gibps 8 20 40 --csv
+# B：24 MiB 固定 workload，64 KiB/1 MiB/8 MiB × outstanding 1/2。
+python3 examples/cpp-data-path/test_async_pipeline.py build/cpp-labs/async_range_pipeline build/cpp-labs/s3_range_probe
+# B：显示 submit→verified→consume→release 与 pool wait 的原始 trace。
+python3 examples/cpp-data-path/test_async_pipeline.py build/cpp-labs/async_range_pipeline build/cpp-labs/s3_range_probe --chunk 1048576 --outstanding 2 --trace
+# C：重点展示 timeout→独立 retry→旧目标 late write→drain→可回收。
+./build/cpp-labs/failure_injection_sim late
+# 不传参数运行全部六类注入。
+./build/cpp-labs/failure_injection_sim
+```
+
+A 输出 KV size、restore/recompute ms、crossover GiB/s 与 decision；`--latency-ms 50 --conversion-ms 10 --prefill-ms 60` 演示没有有限正 crossover。B 的固定两槽与容量 1 ready queue 不会因慢 consumer 无限分配；确定性 gate 保留首个 consumer lease，直到 producer 真正观察到 pool 满，线程用条件变量而非随机 sleep 协调。输出整轮 bytes/wall time、request count、wait 与 peak slots，允许异步负收益。每个 producer 复用自己的 curl handle；localhost 数字不是 S3/GPU/RDMA 性能。
+
+C 每槽用 64 KiB 真实 bytes 表示 64 MiB 逻辑块，旧 worker 超时后仍实际写旧 allocation，不以 generation 检查偷偷阻止晚写。读取 trace 时区分 CALLER_TIMEOUT、LATE_COMPLETION/DRAIN 和 CONSUMER_DONE/STOPPED；它们不是同一回收点。重复通知不重复 publish/release；每个场景最后必须 `inflight=leases=reservations=quarantined=0`，否则非零退出。详细输入/输出 schema 与证据边界见[代码 README](https://github.com/miauyle/ai-storage-notes/blob/master/examples/cpp-data-path/README.md)。
 
 | 当前完成了什么 | 可以说什么 | 下一步仍缺什么 |
 |---|---|---|
 | 实验 1/2 | 完成 CPU ownership/异步 lifetime 练习 | 真实网络、GPU、MR 的完成与回收 |
 | 本地 HTTP 测试 | Range/内容校验与错误拒绝有测试 | 真实 S3 endpoint 验证 |
 | 自己的 S3 fixture 读取通过 | 验证一条真实 S3→host Range 读取切片 | M0 完整要求的普通 GET、重试、重复采样与结果整理 |
-| M1 模拟测试通过（另行实现） | 只对相应模型的状态机/故障作保证 | 真实硬件路径证据 |
+| A/B/C 已实现并有自动测试 | performance decision model、CPU bounded pipeline、六类确定性故障及资源闭合 | 完整 KV manager/M1 平台、真实硬件路径证据 |
 
 完整验收见[Demo 分阶段交付表]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#demo-stage-acceptance)。本页没有实现 KV manager、FakeGpuTier、真实 CUDA 或 RDMA，不因源文件叫 data-path 就宣称这些能力。
 
@@ -161,3 +182,5 @@ fixture 使用位置相关的非密码学生成器，并逐字节比较预期切
 - [S3 GetObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) 与 [预签名 URL](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)：授权和对象读取约束。
 
 2026-09-26：编写并在 Linux/GCC 13.3 上验证 CPU 示例与本地 HTTP 契约；无真实 S3 账号、Mac、GPU 或 RNIC 集成结果。本仓库 CI 也只验证 CPU 与本地 HTTP，不代表这些环境已通过。
+
+2026-10-03：实现 A/B/C，并在 Linux/GCC 13.3/libcurl 8.5 上运行五个 CTest 套件。CPU simulation completed，不等于 GPU/RDMA verified；真实 S3 M0 仍为 optional/manual verification。本阶段仓库建设到此收口，后续转为实际运行、闭卷复述、Interview Drills 和投递。

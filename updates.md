@@ -7,6 +7,13 @@ permalink: /updates/
 
 这里记录已发布的**教程内容更新**，按北京时间排列。每条链接指向当前教程的对应位置；旧章节可能已被后来修订。站点样式、按钮和构建修复不计入内容更新。
 
+## 2026-10-03 · A/B/C 最小工程证据落地，仓库建设收口
+
+- **A：**Python standard-library restore/recompute 工具支持 prefix/bandwidth 扫描、显式 KV size、转换/可见性成本与 CSV；测试公式、单位、交点两侧和无有限正交点。只是 performance decision model，不是 GPU benchmark。
+- **B：**C++ 两槽 owning buffer + 容量 1 ready queue + CPU consumer；本地确定性 HTTP fixture 扫描三种 chunk 与 1/2 outstanding，用条件变量/屏障验证 backpressure、校验后入队和消费后复用。
+- **C：**六类确定性失败事件验证 timeout 后旧目标保活、独立 retry、实际 late write 隔离、重复通知不 double-free、半块不发布及 consumer cancellation；退出资源必须闭合。
+- **运行与边界：**[动手入口]({{ site.baseurl }}/docs/04_CPP_Labs/#cpp-demo-evidence)与[原规格实现状态]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#kv-demo-experiments)同步；五个 CTest 套件覆盖 CPU/local HTTP correctness，真实 S3 仍为手动可选验证，未宣称 GPU/RDMA 或生产性能。本阶段停止扩建，转向运行、闭卷训练与投递。
+
 ## 2026-10-03 · Inference Storage 技术栈与面试收口
 
 - **职责与场景：**补入[Modern KV Infrastructure Stack]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#modern-kv-stack)，区分 runtime、connector、KV management、transfer 与 backend；[P/D Transfer、Shared KV Cache、Object Storage Tier]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#remote-kv-scenarios)分别判断。

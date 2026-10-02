@@ -18,7 +18,7 @@
 
 **这三份正文就是教程。** 官方链接用于核对事实与版本，不要求另读完整 CUDA/RDMA 文档才能理解。没有重写 ECS/ObjectScale 架构，也没有把任务扩成完整 AI Infra 课程。
 
-文档采用 Markdown，便于搜索、改写、做笔记和交给 Codex CLI。图用 Mermaid，表格和公式可直接阅读；在支持 Mermaid 的预览中显示为架构/时序图。三份主教程合计含 **22 组 Interview Check、18 张 Mermaid 图、30 道必答题**。完整 KV/GPU Demo 仍是设计与接口契约；现已提供 CPU ownership/异步 lifetime 和只读 HTTPS Range probe 的 C++ 练习代码，不等于完整 M0/M1 或 GPU/RDMA 已实现。训练册与正文分开，第一次作答时不会直接看到标准答案。
+文档采用 Markdown，便于搜索、改写、做笔记和交给 Codex CLI。图用 Mermaid，表格和公式可直接阅读；在支持 Mermaid 的预览中显示为架构/时序图。三份主教程合计含 **22 组 Interview Check、18 张 Mermaid 图、30 道必答题**。完整 KV/GPU Demo 仍是设计与接口契约；现已提供 CPU ownership、只读 HTTPS Range probe，以及 A/B/C 的计算模型、两槽 CPU pipeline 和确定性失败注入。五个 CTest 套件覆盖本地 correctness，不等于完整 M0/M1 或 GPU/RDMA 已实现。训练册与正文分开，第一次作答时不会直接看到标准答案。
 
 **贯穿案例：**假设一个可复用的 8K Prefix 有 1 GiB KV payload，聚合为 16 个 64 MiB 逻辑块。先决定恢复还是重算，再区分 S3→Host→GPU 基线与双方支持时的 S3 控制请求 + RDMA→GPU 路径；最后证明完整性、布局与设备可见，才发布 GPU Ready。Prefill→Decode 的即时交接优先另行比较直接网络传输，活跃 Decode 不能默认逐 token 从对象层取 KV。
 
@@ -85,7 +85,7 @@
 - [C++ 实验](_docs/04_CPP_Labs.md)：可编译源文件、CMake/CTest、错误版本、修复练习和验证边界。
 - [项目追问链](_docs/03_System_Design_Interview_Demo.md#ecs-project-drills)：先证明已有工作，再说明可迁移判断。
 
-Demo 的核心实现语言仍为 C++17/20。先做真实 S3→host 的 M0，有余力才实现 M1 状态机模拟；普通 C++ S3/HTTP 请求不等于 RDMA。具体交付见[分阶段验收](_docs/03_System_Design_Interview_Demo.md#demo-stage-acceptance)。现有练习只读测试对象，不自动上传、创建桶或运行真实云测试。
+Demo 的核心实现语言仍为 C++17/20，Python 做计算/fixture/扫描。当前 A/B/C 最小工程证据已落地，见[五分钟运行入口](examples/cpp-data-path/README.md)；真实 S3 M0 仍为 optional/manual verification，完整 KV manager 不在此轮实现。普通 C++ S3/HTTP 请求不等于 RDMA。具体交付见[分阶段验收](_docs/03_System_Design_Interview_Demo.md#demo-stage-acceptance)。现有练习只读测试对象，不自动上传、创建桶或运行真实云测试。本阶段建设结束，接下来以实际运行、闭卷复述、Interview Drills、目标 JD 定向补充与投递为主。
 
 ## 三个贯穿算例
 

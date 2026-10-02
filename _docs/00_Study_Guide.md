@@ -102,7 +102,7 @@ C++ 实验累计受上表 12/6 小时预算约束，并非每天再加一份任�
 
 项目深挖入口：[三条项目追问链]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#ecs-project-drills)。优先用你已经整理的私有材料准备，不把内部 DT 字段、公司代码、客户信息搬到公开网站。
 
-[A/B/C 实验证据规格]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#kv-demo-experiments)分别练恢复/重算交点、有界异步流水、失败后安全回收。A 可先跑教学计算；B/C 未实现时只说设计，不能勾选实验通过。选择做它们时替换现有动手预算，M1 仍为可选；C++ 主数据路径、Python workload/benchmark、Go 可选控制面/telemetry 的边界保持。
+[A/B/C 实验证据]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#kv-demo-experiments)已有可运行代码与 correctness tests，分别练恢复/重算交点、有界异步流水、失败后安全回收。自己运行并解释 trace 后才算个人动手证据；仓库测试通过不等于本人已验证真实 S3/GPU/RDMA。使用它们替换现有动手预算，完整 M1 仍为可选；C++ 主数据路径、Python workload/benchmark、Go 可选控制面/telemetry 的边界保持，不增加学习时长。
 
 ## 7. 一轮之后如何判断是否还要补内容
 

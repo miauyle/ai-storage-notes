@@ -903,7 +903,7 @@ RDMA 没有 bucket/key、版本、range/multipart、对象提交或 tenant 权�
 
 ## 8. Demo Design：GPU KV Cache Object Store — SHOULD KNOW
 
-本章是可以交给 Codex CLI 的实现规格。**完整 KV/GPU 系统仍只设计，不提供整套实现。** 配套[最小 C++ 实验]({{ site.baseurl }}/docs/04_CPP_Labs/)已提供 CPU ownership 与只读 Range probe 的代码，属于入门切片，不代表完整 M0/M1 已完成。 目标是展示你懂 KV identity、分层、数据移动与故障，不是一个月内重写 vLLM。
+本章是可以交给 Codex CLI 的实现规格。**完整 KV/GPU 系统仍只设计，不提供整套实现。** 配套[最小 C++ 实验]({{ site.baseurl }}/docs/04_CPP_Labs/)已提供 ownership、Range probe 和 §8.11 A/B/C 的可运行代码及 correctness tests；只证明参数模型、本地 HTTP/CPU pipeline 与确定性故障模型，不代表完整 M0/M1 或 GPU/RDMA 已完成。目标是展示你懂 KV identity、分层、数据移动与故障，不是一个月内重写 vLLM。
 
 **本月必读仅为：**§8.1 的语言与证据边界、§8.12 的 C++ S3→host 基线、§8.11 的可选模拟实验；§8.5 的三条 flow 用于系统设计口述。其余接口与场景供后续实现参考。Demo 不作为开始投递的前置条件。
 
@@ -1126,13 +1126,13 @@ M0 的上传是测试准备，不要求首个 C++ 程序同时实现 PUT；若�
 
 首版不引入真实大模型、Kubernetes、分布式共识、多区域复制或真实 RDMA driver。需要的扩展接口已保留，但不创建一堆无功能的抽象类。README 应解释每个实验能证明和不能证明什么。
 
-**面试展示按已完成阶段准备：**M0 展示真实 endpoint 的 Range/普通 GET 校验、错误处理、原始耗时记录和环境说明；不要求缓存 trace。只有完成 M1 后，才增加 miss→restore→ready、late completion 隔离和参数变化下的正负收益表。入门切片只展示实际通过的子项，不包装为完整 M0。
+**面试展示按已完成阶段准备：**M0 展示真实 endpoint 的 Range/普通 GET 校验、错误处理、原始耗时记录和环境说明；不要求缓存 trace。A/B/C 现在可独立展示决策表、CPU backpressure 与 late completion 隔离，不必冒充完整 M1；完整 miss→restore→ready/cache manager 仍按设计讨论。入门切片只展示实际通过的子项，不包装为完整 M0。
 
 <a id="kv-demo-experiments"></a>
 
 ### 8.11 Demo Evidence：三个小实验，不做完整平台
 
-以下是**实验设计与验收规格**，不是已实现/通过报告。现有 C++ ownership 与只读 Range probe 只证明入门子项；A 的计算片段可直接运行，B/C 仍需实现。先保留 §8.6 的小容量/共享场景作为 fixture，再选 A/B/C，不引入真实模型、集群目录或 Kubernetes。M1 默认不额外加入本月预算。
+以下规格已落实为 [examples/cpp-data-path](https://github.com/miauyle/ai-storage-notes/tree/master/examples/cpp-data-path) 的最小实现：A 为 Python decision model，B 为 C++ 两槽 localhost HTTP/CPU pipeline，C 为 C++ 确定性事件模拟；CTest 覆盖公式、流水正确性及六类失败不变量。**CPU simulation completed ≠ GPU/RDMA verified。** 未实现完整 KV manager、FakeGpuTier/共享目录，也未完成真实 S3 M0；有 endpoint 后才另做 optional/manual verification。现有学习预算不变，本阶段停止扩展知识与 Demo milestones。
 
 <a id="restore-recompute-experiment"></a>
 
@@ -1142,21 +1142,13 @@ M0 的上传是测试准备，不要求首个 C++ 程序同时实现 PUT；若�
 
 在**串行简化模型**中：`restore_ms = fixed_ms + KV_GiB / effective_GiBps × 1000`；`recompute_ms = prefill_ms + compute_queue_ms`。effective bandwidth 若只取 NIC 带宽，会低估 storage/H2D/转换瓶颈；固定 latency 不应重复计入已测的端到端吞吐。pipeline 模型另用 trace，不混在这条公式里。
 
-可直接运行的 Python 分析片段（教学输入，数据主路径仍用 C++）：
+可运行的 Python 工具（教学输入，数据主路径仍用 C++；默认每档同用 60 ms 是独立输入，不是长度→算力预测）：
 
-```python
-bytes_per_token = 128 * 1024
-fixed_ms, prefill_ms = 5.0, 60.0
-for tokens in (2048, 8192, 32768):
-    gib = tokens * bytes_per_token / 2**30
-    # 此处每档同用 60 ms 是独立给定输入，不是长度→算力预测。
-    crossover = gib / ((prefill_ms - fixed_ms) / 1000)
-    for bandwidth in (8.0, 20.0, 40.0):
-        restore_ms = fixed_ms + gib / bandwidth * 1000
-        decision = "restore" if restore_ms < prefill_ms else "recompute"
-        print(tokens, bandwidth, round(restore_ms, 3), prefill_ms,
-              round(crossover, 3), decision)
+```bash
+python3 examples/cpp-data-path/restore_recompute.py --tokens 2048 8192 32768 --bandwidth-gibps 8 20 40 --csv
 ```
+
+支持 `--bytes-per-token` 或 `--kv-bytes`、`--latency-ms`、`--conversion-ms`（含 visibility）、`--prefill-ms`、`--compute-queue-ms`。CSV 保留输入、KV bytes/GiB、restore/recompute ms、临界 GiB/s 与 decision；没有临界点时 CSV 字段留空，相等选择 recompute。自动测试覆盖两侧、临界附近、单位及无有限正交点。**这是 performance decision model，不是 GPU benchmark。**
 
 8,192 tokens 一行应为 1 GiB：8/20/40 GiB/s 分别得到 130/55/30 ms，临界带宽约 18.18 GiB/s；相等时无延迟收益。若 `recompute_ms <= fixed_ms`，这个模型没有有限正临界带宽，应直接判不值得恢复，而不是输出负带宽。也可扫描长度：固定 bytes/token 与成本假设下 `T_cross = (recompute_ms-fixed_ms)/1000 × B × 2^30 / bytes_per_token`；实际 prefill 随长度变化时改用测量表求交点。
 
@@ -1181,6 +1173,8 @@ for tokens in (2048, 8192, 32768):
 
 与 ECS chunk replication / Tech Refresh 的连接是**有界在途资源、chunk 粒度、后台搬运与 consumer 的进度协调**。经验可迁移；本实验是前台 Range pipeline，过去的复制/迁移不是 GPU transfer，完成、硬件和 SLO 不等价。
 
+**当前实现：**`async_range_pipeline.cpp` 固定两槽、ready queue capacity=1、1/2 producer，逐一验证 Range/bytes 后才入队；consumer 完成再 FREE。Python runner 复用确定性 Range fixture，固定 24 MiB 扫描六档，首个 consumer 用 condition variable 等待实际 pool exhaustion，两 producer 的首两个 GET 用 server barrier 证明重叠，不靠随机 sleep。输出 steady-clock trace、整轮吞吐、wait/peak/resource schema；不把 gate 时间当真实后端延迟。每个 producer 复用自己的 curl handle；额外测试尾部短 chunk 及七类错误响应拒绝。运行命令见[动手页]({{ site.baseurl }}/docs/04_CPP_Labs/#cpp-demo-evidence)。当前 B 仅允许 localhost，真实 S3 仍用已有手动 probe；这不是完整 M0。
+
 <a id="failure-injection-experiment"></a>
 
 #### Experiment C：Failure Injection
@@ -1196,11 +1190,13 @@ for tokens in (2048, 8192, 32768):
 | consumer failure | 已开始消费的 target 保活到 consumer 实际停止；通知失败本身不允许提前复用 |
 | partial failure | 写完半块或多块中一块失败，都不能把完整 prefix 标 READY；已成功块是否单独可复用须有独立完整块 proof |
 
-最小 trace 的**期望时序**：`old submit → partial → caller timeout → quarantine(old) → retry(new) → verify(new) → publish(new) → late_write(old) → drain(old) → release(old) → consumer_done(new) → release(new)`。不是实测记录。若测试仅把旧 generation 的回调丢弃，却允许旧设备写入 reused 地址，仍不合格。
+最小 trace 的**已实现逻辑时序**：`old submit → partial → caller timeout → quarantine(old) → retry(new) → verify(new) → publish(new) → late_write(old) → drain(old) → release(old) → consumer_done(new) → release(new)`。这是可运行 CPU 事件记录，不是设备实测。旧 worker 持有真实小 payload owner，在超时后仍实际写旧 bytes；若只丢弃旧 generation 回调却允许旧设备写 reused 地址，仍不合格。
 
 **证据交付：**对六种注入各保存事件 trace、旧/新 allocation ID、发布次数、内容校验、峰值资源和退出后 `inflight/leases/reservations=0`。至少断言旧 target 在 drain 前不可借出、新内容未受污染、半块不发布。重复通知不得 double-free；资源耗尽时 bounded retry/backpressure，不能无限分配新 buffer 来“安全重试”。
 
 最终回答是：**timeout ≠ DMA / async work 真正停止；logical failure、transfer drain、consumer completion 是不同回收条件。** CPU 模拟证明这套协议在该事件模型内成立；真实 CUDA/RDMA 必须重新验证取消、memory registration、visibility 与 drain 契约。
+
+**当前实现：**`failure_injection_sim.cpp` 提供 timeout/retry/duplicate/late/partial/consumer 六种确定性序列，固定两个 slots；每槽 64 KiB 实际 payload 表示 64 MiB 逻辑块，半块为 32 KiB/32 MiB。记录 request/attempt/allocation/generation、state、published、inflight/leases/reservations。重复请求 single-flight；完成通知与 drain 去重；consumer cancellation 通知后保活到明确 STOPPED。`late` 还验证 drain 后才能再次借出旧 slot 的新 generation。每个场景退出必须 `inflight=leases=reservations=quarantined=0`，运行时检查在 Release 下仍有效；Python 再独立检查 trace 顺序与发布/释放计数。未模拟真实 memory registration 或设备取消保证。
 
 <a id="s3-host-probe"></a>
 
