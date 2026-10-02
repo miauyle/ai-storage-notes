@@ -14,7 +14,7 @@ docsteer:
   mode: auto
   skin_switcher: true
   mode_switcher: true
-  doc_layouts: [doc, faq]
+  doc_layouts: [doc]
 
   sidebar:
     enabled: true
@@ -32,7 +32,7 @@ docsteer:
     hotkey: true
     placeholder: "搜索文档…"
     max_results: 8
-    index_questions: true
+    index_questions: false
 
   lightbox:
     enabled: true
