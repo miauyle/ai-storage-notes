@@ -11,6 +11,7 @@ description: 从 LLM workload 推导 KV Cache 的容量、访问模式、缓存�
 > 学习产出：能从 workload 推导容量、访问模式、缓存层级与存储选型，而不是只解释名词。
 > 面试版修订：2026-09-20。新增案例均为明确假设下的推演；本次重点复核 prefix caching 与 CUDA/传输相关边界，未将全部来源重新标为当日核实。
 > 2026-09-25：新增 KV × S3 × GPU 贯穿案例，并按 ECS/ObjectScale 的 Java 功能开发、Go telemetry 与实际排障经验校准前置；时间预算仍为教学假设。
+> 2026-10-03：补 Modern KV Stack 与职责定位，不扩大训练专题。
 
 ## 第一遍阅读导航
 
@@ -49,10 +50,13 @@ description: 从 LLM workload 推导 KV Cache 的容量、访问模式、缓存�
 | ECS 跨 VDC chunk replication：源端推动复制到目标端 | 异步任务、数据完整性、部分失败后的重试与状态收敛 | 冷 KV 是请求触发的读取；控制端命中后还要完成 GPU buffer、layout 与设备可见性，且常受 TTFT 约束 |
 | ECS 在线 data migration / Tech Refresh | 源/目标状态、在线搬运和后台任务不能无限抢占资源 | 可重算 KV 不必照搬持久数据的保护等级；重算也要受 GPU 容量和在线 SLO 限制 |
 | ObjectScale Bucket 级 CRR | 对象身份与跨站复制的失败处理 | 同机房冷 KV 复用不是默认跨站 CRR；要另外证明保存、恢复比重算划算 |
+| ECS Copy to Cloud、Journal Replay、Remote Read、Recovery（按本人职责展开） | S3 目标语义、回放/补偿、远端读取与恢复的状态推理 | KV 有不同的可重算性、GPU layout 与完成条件；不能照搬对象耐久策略或把回放当 P/D transfer |
 | Go telemetry | ECS/ObjectScale 运行数据的采集与统计分析 | 不把它写成队列定位或 GPU/RDMA 硬件测量经历 |
 | 线上问题定位 | 结合日志和 chunk 内 DT 表等状态分析 | 保留证据驱动的方法；新的 GPU/网络故障需要新环境的数据验证 |
 
 读正文前只需确认三个概念：① token→Prefill→每层 KV→Decode（§1～§5）；② 对象版本/Range→后端 bytes→host buffer 的前台读路径（[Document 2 §7]({{ '/docs/02_GPU_Data_Path/' | relative_url }}#s3-server-read-prereq)）；③ Java 引用或 direct buffer、C++ owning pointer/lease、pinned/registered/device memory 的存活与完成条件不是一回事（[Document 2 §2]({{ '/docs/02_GPU_Data_Path/' | relative_url }}#chapter-2)）。不要求先学整个训练平台。写入公开笔记时只放通用流程和自造数字，不贴公司代码、DT 表字段、内部架构图或客户数据。
+
+已有 Dell EMC ECS/ObjectScale 工作时长为 **3 年 10 个月**，主力语言为 Java / Go / Python；底层 C++ 组件主要由其他团队负责。可迁移的是 distributed data movement、failure handling、retry/idempotency、metadata/state、S3 semantics、容量、backpressure、observability 与排障方法。CUDA memory model、GPU/pinned memory、RDMA verbs、GPUDirect、NIXL、KV layout、inference runtime 与 P/D 是需要补齐的新知识。**工程方法可迁移，具体数据路径与硬件语义不同；ECS replication 不等于 KV transfer。**
 
 ### 本月贯穿主线：KV Cache × GPU Data Path × S3 over RDMA
 
@@ -706,7 +710,39 @@ LRU 不能随意丢弃活跃请求仍需要的 KV。若淘汰后无法在使用�
 
 Prefetch 的关键不是“尽量早”，而是 `预计可用时间 ≤ 消费 deadline`，且不挤掉更有价值的热数据。已知排队请求比猜测未来用户输入更容易预测。
 
-### 6.7 vLLM 与 LMCache 放在哪里 — SHOULD KNOW
+<a id="modern-kv-stack"></a>
+
+### 6.7 Modern KV Infrastructure Stack — SHOULD KNOW
+
+先按职责理解 2026 inference storage stack，再选产品。下面是**教学分层**，不是所有部署都必须安装的串联组件；runtime 自己也管理 HBM KV，外部 cache manager 是可选扩展。
+
+| 层 | 负责什么 | 典型定位与边界 |
+|---|---|---|
+| LLM Request → Router / Scheduler | 选择 P/D worker、排队、准入、考虑 locality 与 SLO | 路由到已有 prefix 的节点，未必比空闲节点重算更快 |
+| Inference Runtime | Prefill/Decode 执行、batch、GPU pages 与 block table | vLLM / SGLang；负责消费 KV，不等于远端存储服务 |
+| KV Connector | 把引擎的块、调度与 load/store/transfer 生命周期接到外部能力 | 如 vLLM NixlConnector；connector 名称不能替代后端兼容验证 |
+| KV Cache Management（可选） | lookup、identity、admission、eviction、dedup、副本、容量与位置 | LMCache；Mooncake Store 可作为共享缓存后端，职责有重叠 |
+| Transfer Abstraction | 描述源/目标、注册资源、提交传输、跟踪完成，隔离后端差异 | NIXL、Mooncake Transfer Engine；不决定哪些 prefix 值得保留 |
+| Communication / Transport | 实际通信、路径选择与数据移动 | UCX 是通信库，可选 RDMA/TCP 等路径；NVLink 是互连，不能把这四个名字当同层协议 |
+| Memory / Storage Backend | 保存 bytes，提供访问与本层容量/故障语义 | HBM / DRAM / NVMe / Remote Storage / Object Storage；易失内存不因用了 RDMA 就耐久 |
+
+```mermaid
+flowchart TD
+    R["LLM Request / Router / Scheduler"] --> I["Inference Runtime：vLLM / SGLang"]
+    I --> C["KV Connector"]
+    C --> M["可选 KV Management / Shared Store"]
+    C --> X["Transfer Abstraction：NIXL / Mooncake TE"]
+    M --> X
+    X --> T["通信后端：如 UCX → RDMA / TCP / NVLink path"]
+    T --> H["HBM / DRAM：近端或远端"]
+    X --> S["Storage backend：NVMe / File / Object"]
+```
+
+图允许 connector 直接传 P/D KV，也允许通过 manager 找共享副本；storage plugin 未必经过 UCX。**NIXL / LMCache / Mooncake 不能被画成三个必选串联层，更不能统称为同一种“KV Cache 系统”。** Mooncake 要说清是 Transfer Engine 还是 Store；NIXL 的 backend plugin 还可接其他传输/存储实现。
+
+**当前官方事实（2026-10-03 在线快照）：**[NIXL](https://github.com/ai-dynamo/nixl)抽象 memory/storage 与插件式传输；[vLLM NixlConnector](https://docs.vllm.ai/en/latest/features/nixl_connector_usage/)对接 P/D 交接；[SGLang P/D](https://docs.sglang.io/docs/advanced_features/pd_disaggregation)列出 NIXL 和 Mooncake transfer engine。[Mooncake 官方仓库](https://github.com/kvcache-ai/Mooncake)区分 TE 与 Store；[LMCache 管理文档](https://docs.lmcache.ai/kv_cache_management/index.html)提供共享 KV 的管理入口。这些是可组合的定位，不承诺任意版本互换。
+
+以下保留 vLLM/LMCache 的已有背景说明；NIXL 的六道面试问题见[第二篇 §8.1]({{ site.baseurl }}/docs/02_GPU_Data_Path/#nixl-interview)。
 
 vLLM 是推理执行/调度框架，内部管理 GPU KV。它也有 KV connector/offloading 机制。官方 2026-01 的文章解释原生 CPU offloading 与为传输优化物理布局的工作；文章中的版本与性能结果仅对其发布时配置成立。[vLLM Offloading Connector](https://vllm.ai/blog/2026-01-08-kv-offloading-connector)
 

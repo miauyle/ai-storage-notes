@@ -1,7 +1,7 @@
 # AI Storage 一个月面试冲刺教程
 
-> 面向 Dell ECS/ObjectScale 工程师：Java 为复制/迁移/CRR 功能开发主力；Go 用于运行数据 telemetry 采集与统计，Python 曾用于工作。
-> 面试主线修订：2026-09-26 · 中文教程，保留英文术语与英文短答。
+> 面向 Dell EMC ECS/ObjectScale 工程师（3 年 10 个月）：Java 为复制/迁移/CRR 功能开发主力；Go 用于运行数据 telemetry 采集与统计，Python 曾用于工作。
+> 面试主线修订：2026-10-03 · 中文教程，保留英文术语与英文短答。
 >
 > 目标：用约一个月准备 KV Cache × GPU Data Path × S3 over RDMA 交汇处的存储岗位，并在准备过程中开始针对性投递。
 
@@ -18,7 +18,7 @@
 
 **这三份正文就是教程。** 官方链接用于核对事实与版本，不要求另读完整 CUDA/RDMA 文档才能理解。没有重写 ECS/ObjectScale 架构，也没有把任务扩成完整 AI Infra 课程。
 
-文档采用 Markdown，便于搜索、改写、做笔记和交给 Codex CLI。图用 Mermaid，表格和公式可直接阅读；在支持 Mermaid 的预览中显示为架构/时序图。三份主教程合计含 **22 组 Interview Check、17 张 Mermaid 图、30 道必答题**。完整 KV/GPU Demo 仍是设计与接口契约；现已提供 CPU ownership/异步 lifetime 和只读 HTTPS Range probe 的 C++ 练习代码，不等于完整 M0/M1 或 GPU/RDMA 已实现。训练册与正文分开，第一次作答时不会直接看到标准答案。
+文档采用 Markdown，便于搜索、改写、做笔记和交给 Codex CLI。图用 Mermaid，表格和公式可直接阅读；在支持 Mermaid 的预览中显示为架构/时序图。三份主教程合计含 **22 组 Interview Check、18 张 Mermaid 图、30 道必答题**。完整 KV/GPU Demo 仍是设计与接口契约；现已提供 CPU ownership/异步 lifetime 和只读 HTTPS Range probe 的 C++ 练习代码，不等于完整 M0/M1 或 GPU/RDMA 已实现。训练册与正文分开，第一次作答时不会直接看到标准答案。
 
 **贯穿案例：**假设一个可复用的 8K Prefix 有 1 GiB KV payload，聚合为 16 个 64 MiB 逻辑块。先决定恢复还是重算，再区分 S3→Host→GPU 基线与双方支持时的 S3 控制请求 + RDMA→GPU 路径；最后证明完整性、布局与设备可见，才发布 GPU Ready。Prefill→Decode 的即时交接优先另行比较直接网络传输，活跃 Decode 不能默认逐 token 从对象层取 KV。
 
@@ -45,6 +45,18 @@
 | 机制 | 能解释数据依赖、资源和完成顺序 | SHOULD KNOW 到这里 |
 | 决策 | 能算数量级；输入或故障改变后会修改方案 | 核心 MUST KNOW 到这里 |
 | 完整实现 | 驱动/API 细节、所有异常、全框架兼容和性能调优 | 除 JD 明确要求外，本月不追求 |
+
+## 2026 Inference Storage：本轮收口入口
+
+| 应能回答的问题 | 现有正文入口 |
+|---|---|
+| runtime、connector、管理层、传输库与 backend 分别做什么；NIXL 在哪里 | [Modern KV Stack](_docs/01_AI_Storage_KV_Cache.md#modern-kv-stack)、[NIXL 六问（SHOULD KNOW）](_docs/02_GPU_Data_Path.md#nixl-interview)；UCX 的实现深度仍为 NICE TO KNOW |
+| P/D Transfer、Shared KV Cache 与 Object Storage Tier 有何区别 | [三类远端 KV](_docs/03_System_Design_Interview_Demo.md#remote-kv-scenarios) |
+| KV bytes 搬完为何不一定能用 | [Compatibility Contract](_docs/03_System_Design_Interview_Demo.md#kv-compatibility-contract)；identity / representation / runtime 分开判断 |
+| cuObject 的 S3/RDMA、client/server 与完成边界 | [第二篇 §7.3](_docs/02_GPU_Data_Path.md#chapter-7)，按本次官方 release notes 校准 |
+| 无 GPU/RDMA 实验室如何给工程证据、如何分段排障 | [A/B/C 实验规格](_docs/03_System_Design_Interview_Demo.md#kv-demo-experiments)、[Troubleshooting Matrix](_docs/03_System_Design_Interview_Demo.md#inference-troubleshooting)；设计、计算与已运行测试分开 |
+
+本轮不新增基础大教程。已有生产经历可迁移的是 distributed data movement、failure/retry/idempotency、metadata/state、S3 semantics、容量、backpressure 和证据驱动排障；CUDA/GPU/pinned memory、RDMA/GPUDirect、NIXL、KV layout、runtime 与 P/D 仍是需要新学的能力。C++ 仅用于转向岗位的数据路径练习，不改写过去 Java/Go/Python 经历。
 
 ## 这次补深的内容，优先读哪里
 
@@ -85,7 +97,7 @@ Demo 的核心实现语言仍为 C++17/20。先做真实 S3→host 的 M0，有�
 
 ## 技术状态与证据口径
 
-下表保留原版 2026-09-19 的核实口径。2026-09-20 修订重点复核 vLLM prefix caching、Transformers 缓存解释、CUDA 同步/异步、libibverbs MR/post-send、cuObject 与 LMCache 兼容性页面；其他条目不冒充当日全量复核。
+2026-10-03 仅复核本轮 modern stack、NIXL/vLLM compatibility、LMCache/Mooncake 定位和 cuObject 条目，详见 SOURCES；未将 CUDA/GDS 等旧条目冒充全量刷新。下表其他项保留原版 2026-09-19 的核实口径。2026-09-20 修订重点复核 vLLM prefix caching、Transformers 缓存解释、CUDA 同步/异步、libibverbs MR/post-send、cuObject 与 LMCache 兼容性页面；其他条目不冒充当日全量复核。
 
 | 主题 | 本次核对与分类 | 阅读时的边界 |
 |---|---|---|
@@ -94,10 +106,11 @@ Demo 的核心实现语言仍为 C++17/20。先做真实 S3→host 的 M0，有�
 | libibverbs | 用户态 RDMA 接口与开源生态 | 不是 wire protocol；操作能力取决于 transport/provider |
 | CUDA / GPUDirect RDMA | NVIDIA 技术，在线参考显示 13.4 | 本文核对的是文档快照；安装时核对硬件/驱动/runtime |
 | GDS | NVIDIA 技术与存储栈集成 | 功能与直达能力依文件系统、平台、版本；有 fallback |
-| cuObject | NVIDIA 官方 client/server libraries | 2026-09-17 页面仍有效；client 从 Toolkit 13.1.1 起提供，当前文档要求 DC；不推定任意 S3 服务可用 |
+| cuObject | NVIDIA 官方 client/server libraries | 2026-10-03 复核：client v1.3.1 / server v2.0.0，要求 DC；同步 client 与异步 server 分开，不推定任意 S3 服务可用 |
 | vLLM Paged Attention 页面 | 官方历史设计说明 | 页面明确不再代表全部当前实现；本教程学习原理 |
 | vLLM prefix / offloading | 框架具体实现 | 后端、版本和布局有关，不把某篇旧 benchmark 当通用结果 |
-| LMCache | 开源 KV 管理/复用层 | 当前文档有独立进程与 legacy 模式；兼容性是版本组合问题 |
+| LMCache / Mooncake | KV 管理/共享后端与传输实现需区分 | 2026-10-03 定位复核；Mooncake TE 与 Store 不是同一层，版本组合另验 |
+| NIXL / vLLM connector | 传输抽象与引擎适配点 | 2026-10-03 官方定位/compatibility matrix；不替代 cache policy 或完整模型身份验证 |
 | 本教程系统/Demo | Architecture proposal / simulation design | 不包装成行业标准、既有产品或已测性能 |
 
 官方依据：[CUDA Runtime](https://docs.nvidia.com/cuda/cuda-runtime-api/api-sync-behavior.html)、[GPUDirect RDMA](https://docs.nvidia.com/cuda/gpudirect-rdma/index.html)、[GDS](https://docs.nvidia.com/gpudirect-storage/overview-guide/index.html)、[cuObject](https://docs.nvidia.com/gpudirect-storage/cuobject/index.html)、[vLLM 历史说明页](https://docs.vllm.ai/en/latest/design/paged_attention/)、[LMCache 兼容性](https://docs.lmcache.ai/getting_started/compatibility.html)。各正文还在相关事实附近给出直接来源。

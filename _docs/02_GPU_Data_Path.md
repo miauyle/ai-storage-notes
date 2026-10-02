@@ -10,6 +10,7 @@ description: 理解 Storage 到 GPU 的数据路径、ownership、DMA 与完成�
 > 核实日期：2026-09-19。CUDA Runtime / GPUDirect RDMA 在线页面显示 13.4；cuObject 页面更新于 2026-09-17。它们是本次核对的文档快照，不代表任意环境都具备相同支持。
 > 面试版修订：2026-09-20；本次复核 CUDA 同步/异步说明、verbs MR/post-send 与 cuObject 页面。新增时序与性能案例为教学假设。
 > 2026-09-25：新增冷 KV Range GET 贯穿案例及通用对象服务端前台读路径；Java→C++ 的 buffer 前置也做了补充。未对所有外部资料重新核实。
+> 2026-10-03：NIXL 升为 SHOULD KNOW；cuObject 按本次官方 overview/API/release notes 复核，其他旧来源未全量刷新。
 
 ## 第一遍阅读导航
 
@@ -42,8 +43,8 @@ description: 理解 Storage 到 GPU 的数据路径、ownership、DMA 与完成�
 | 等级 | 范围 |
 |---|---|
 | MUST KNOW | host/device、pinned memory、DMA、Stream/Event、MR/QP/CQ、READ/WRITE、GPUDirect 区别、S3 控制与数据路径 |
-| SHOULD KNOW | 必要 C++、NUMA/拓扑、verbs 生命周期、错误定位、cuObject 的具体限制 |
-| NICE TO KNOW | Unified Memory 的平台差异、ODP、DC transport、NIXL/UCX 在栈中的位置 |
+| SHOULD KNOW | 必要 C++、NUMA/拓扑、verbs 生命周期、错误定位、cuObject 的具体限制、NIXL 的职责与 P/D 定位 |
+| NICE TO KNOW | Unified Memory 的平台差异、ODP、DC transport、UCX 的后端定位与配置深度 |
 | SKIP FOR NOW | PTX/SASS、Tensor Core 编程、CUTLASS、模板元编程、ABI 细节、RDMA driver/firmware、PCIe 电气层 |
 
 正文中的 C++/CUDA 小片段用于解释 lifetime 与顺序，不是一套完整 Demo。Demo 的实现边界在 Document 3。
@@ -806,11 +807,11 @@ S3 API 是广泛兼容的对象 API 体系；RDMA/IB/RoCE 有各自规范与生�
 
 ### 7.3 NVIDIA cuObject：本次官方核实结果 — SHOULD KNOW
 
-截至本次核对，cuObject 仍是有效的 NVIDIA 官方技术，定位为 GPUDirect Storage for Objects。简要事实：
+2026-10-03 核对官方 overview、client/server release notes 和 API；这是在线快照，不是本仓库集成实测。cuObject 定位为 GPUDirect Storage for Objects。简要事实：
 
 | 项目 | 官方页面描述 |
 |---|---|
-| 分发 | Client library 从 CUDA Toolkit 13.1.1 起提供；server library 独立分发 |
+| 分发与版本 | Client 从 CUDA Toolkit 13.1.1 起提供；release notes 列 client v1.3.1 对应 CUDA 13.4.1（2026-09-16）、server v2.0.0 对应 CUDA 13.4（2026-08-18）；server 单独获取/集成，不因安装 client 就有对象服务 |
 | 集成 | 需要修改/集成客户端 S3 SDK 与存储端软件 |
 | 内存 | 支持 GPU 或 system memory buffer |
 | 协商 | 使用扩展 tag，例如 `x-amz-rdma-token` 与回复 tag |
@@ -819,7 +820,13 @@ S3 API 是广泛兼容的对象 API 体系；RDMA/IB/RoCE 有各自规范与生�
 | PUT | 服务端以 RDMA READ 拉取 client buffer |
 | 操作 | 页面列出 GET/GETFILE、PUT/PUTFILE、RANGE_GET、UPLOAD_PART 为 Version 1 |
 
-这说明它是具体 NVIDIA library/集成方案；页面未据此承诺所有 endpoint、NIC 或部署均可互通，也不能把“Version 1”自行解释成所有产品已 GA。[NVIDIA cuObject 官方文档，更新于 2026-09-17](https://docs.nvidia.com/gpudirect-storage/cuobject/index.html)
+以上控制/数据分离、GET→WRITE、PUT→READ 与目标 memory 的定位来自 [NVIDIA cuObject overview](https://docs.nvidia.com/gpudirect-storage/cuobject/index.html)。operation 表的“Version 1”不是当前 client/server library 版本号，也不是所有产品 GA 或任意 S3 endpoint 互通的保证。
+
+**完成模型 — SHOULD KNOW：**[client API](https://docs.nvidia.com/gpudirect-storage/cuobject/cuObjClient-api/index.html)中的 `cuObjGet/cuObjPut` 是同步调用，用户 callback 接入控制请求；“callback-based”不等于所有 client 调用异步返回。[server v2.0.0 release notes](https://docs.nvidia.com/gpudirect-storage/cuobject/cuobject-server-release-notes/index.html)列出异步 polling，以及新增通过 file descriptor 配合 poll/epoll/io_uring 的 event-driven completion。不要把 server 的 async 模式写成 client 全 API 的统一承诺。应用还要证明正确 layout、consumer 顺序与对象 PUT 提交语义。
+
+**路径恢复 — NICE TO KNOW：**[client release notes](https://docs.nvidia.com/gpudirect-storage/cuobject/cuobject-client-release-notes/index.html)列出 v1.2.0 的多 NIC failover/failback（初始化至少两个 active RDMA devices）与 v1.3.0 的 token reset；server v2.0.0 有 multi-VIP failover/rotation，并提醒旧 binary 的 ABI 不预期兼容。不要把这些能力扩大成“任意失败都透明恢复”或无条件带宽聚合。client 同页警告 deregister/re-register 后 memory key 可能复用，旧 I/O 必须 drain 或依官方关闭契约隔离；软件 generation 不能代替实际访问终止。
+
+**面试收口：为什么 S3 over RDMA 不只是把 HTTP 换成 RDMA？** 因为 S3 请求仍承担 namespace、鉴权、版本、Range/multipart 与提交语义；协商后 RDMA 主要承担 payload data movement。需要改的是两端 SDK/server 的 buffer capability、完成/错误与重试契约，而不是替换一条 URL 的 scheme。
 
 本月不背其完整函数签名。你应能解释上述角色，并指出落地依赖的 SDK/server、DC-capable transport、GPU mapping 与完成语义。**不要把通用 verbs 学习时的 RC 示例，直接当成当前 cuObject 的 transport 实现。**
 
@@ -953,7 +960,24 @@ CPU 解压是另一个选择点：如果存储格式必须在 CPU 上解码，�
 | GPU timeline / event | 是否串行等待，或转换成为瓶颈 |
 | NIC/CQ 错误与拥塞计数 | 网络重试、QP/receive/credit 问题 |
 
-一个 NIXL/UCX 等传输抽象层可以封装多种后端，降低上层耦合，但不替代 cache policy 和存储语义。本月知道它的层次即可。[NVIDIA NIXL 官方仓库](https://github.com/ai-dynamo/nixl)
+<a id="nixl-interview"></a>
+
+### NIXL：六个问题收口到工程职责 — SHOULD KNOW
+
+NIXL（NVIDIA Inference Xfer Library）以插件式接口抽象不同 memory/storage 的点对点搬运；当前定位以 [NIXL 官方仓库](https://github.com/ai-dynamo/nixl)和 [vLLM NixlConnector 使用说明](https://docs.vllm.ai/en/latest/features/nixl_connector_usage/)为准，2026-10-03 核对。UCX 的实现/config 深度仍为 NICE TO KNOW，不读源码或背 NIXL API。
+
+| 面试问题 | 达标回答 |
+|---|---|
+| 1. NIXL 解决什么？ | 上层用统一的源/目标 descriptor、资源注册与异步 transfer/completion 抽象面对不同 memory 和插件后端，减少引擎和硬件路径耦合 |
+| 2. 引擎为什么不直接绑定 verbs？ | 否则每个引擎重复管理 MR/QP/CQ、设备和错误差异；抽象让路径演进更容易，但不免除 lifetime/拓扑/完成验证 |
+| 3. NIXL、UCX、RDMA 谁在哪层？ | NIXL 是 transfer abstraction；UCX 是它可使用的通信 backend，能选择多种底层路径；RDMA 是其中的通信能力，不是 NIXL 的同义词 |
+| 4. P/D 中它在哪？ | runtime 的 connector 把 KV 块与接收目标交给 NIXL 搬运；router/scheduler 仍决定交给谁、何时激活 Decode |
+| 5. 与 LMCache / Mooncake / vLLM connector 什么关系？ | connector 是引擎适配点；LMCache 是 KV 管理/复用层；Mooncake TE 是传输实现，Store 是共享后端；可按支持组合集成，不能假设全部必选 |
+| 6. 能替代 cache policy / storage semantics 吗？ | 不能；传输库不知道哪些 prefix 有复用价值，也不自动提供 S3 namespace、对象提交/耐久、租户隔离或 runtime KV compatibility |
+
+**现实案例：**官方 vLLM NixlConnector 使用 NIXL 做异步 P/D transfer，默认通信 backend 为 UCX，也可选择已安装的其他插件。库名不证明实际走 RDMA、GPU-direct 或 NVLink；要记录 memory kind、backend、拓扑与路径证据。NIXL 本身覆盖的 storage plugin 不等于某 connector 已支持所有冷层；选型仍受集成版本约束。
+
+**30 秒英文起手：**“NIXL abstracts data movement across memory and storage backends. A KV connector adapts the inference runtime to that transfer layer. It does not decide cache admission or prove KV compatibility, and the actual RDMA or GPU-direct path still needs validation.”
 
 <a id="gpu-path-performance"></a>
 

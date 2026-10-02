@@ -7,6 +7,13 @@ permalink: /updates/
 
 这里记录已发布的**教程内容更新**，按北京时间排列。每条链接指向当前教程的对应位置；旧章节可能已被后来修订。站点样式、按钮和构建修复不计入内容更新。
 
+## 2026-10-03 · Inference Storage 技术栈与面试收口
+
+- **职责与场景：**补入[Modern KV Infrastructure Stack]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#modern-kv-stack)，区分 runtime、connector、KV management、transfer 与 backend；[P/D Transfer、Shared KV Cache、Object Storage Tier]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#remote-kv-scenarios)分别判断。
+- **NIXL 与兼容性：**[NIXL 六问]({{ site.baseurl }}/docs/02_GPU_Data_Path/#nixl-interview)提升为 SHOULD KNOW，学习指南与训练链同步；[Compatibility Contract]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#kv-compatibility-contract)区分 identity、representation、runtime，并标清 vLLM 当前产品事实与教学原则。
+- **cuObject 校准：**按官方 overview、client/server release notes 与 API 更新[双端版本、GET/PUT 方向与完成边界]({{ site.baseurl }}/docs/02_GPU_Data_Path/#chapter-7)，不把 S3 over RDMA 讲成 HTTP 协议替换。
+- **可验证证据与排障：**[A/B/C 实验规格]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#kv-demo-experiments)定义恢复/重算交点、有界异步流水与六类失败注入；[排障矩阵]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#inference-troubleshooting)以日志、状态、路径指标和实验闭合证据。实验设计与已有代码验证分别标记，未冒充已跑 GPU/RDMA。
+
 ## 2026-09-26 · 从阅读到动手：使用指南、C++ 实验与项目追问
 
 - **网站使用指南：**新增[90/60 小时预算与 30 天安排]({{ site.baseurl }}/docs/00_Study_Guide/#time-budget)，把原先 README 中的学习安排带到网站；实验替换部分阅读，不额外叠加任务。

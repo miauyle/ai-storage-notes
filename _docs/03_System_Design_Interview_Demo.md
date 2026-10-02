@@ -10,6 +10,7 @@ description: 分布式 KV Cache 系统设计、面试答案与 Demo 规格。
 > 核实日期：2026-09-19。以下系统是**面试与 Demo 的 architecture proposal**，不是某厂商产品规格或已实测性能。
 > 面试版修订：2026-09-20。重点补充连续追问、容量落地、故障预算与闭卷验收；完整接口作为后续实现参考。
 > 2026-09-25：新增冷 Prefix 跨 S3/GPU 案例，校准 ECS/ObjectScale 个人项目卡，并把可选 Demo 统一为 C++ 基线与模拟；所有数值推演仍为教学输入。
+> 2026-10-03：补三类场景、Compatibility Contract、A/B/C 实验规格与排障矩阵；未宣称新硬件/集成实验通过。
 
 ## 第一遍阅读导航
 
@@ -73,6 +74,20 @@ description: 分布式 KV Cache 系统设计、面试答案与 Demo 规格。
 | 部署是否同机房、具备何种 GPU/NIC，KV 丢失能否重算？ | 决定 RDMA/GPU-direct、故障保护与降级 |
 
 本题示例假设：同机房推理集群；GQA 模型参数沿用 Document 1；这里的 8K/2K tokens 分别表示 8,192/2,048，8K cached tokens 约 1 GiB/request；先服务**可复用 prefix 与暂停请求**，活跃 Decode 工作集优先 HBM。下面用 TTFT p95 300 ms、ITL p99 30 ms 作教学 SLO；它们不是对硬件性能的承诺。
+
+<a id="remote-kv-scenarios"></a>
+
+### 三类远端 KV：先选问题，再选后端 — MUST KNOW
+
+| 场景 | 目的与生命周期 | 核心操作 / 面试重点 | 技术定位 |
+|---|---|---|---|
+| Prefill → Decode KV Transfer | 一次 inference request 的阶段交接；源 KV 保活到目标安全接收，消费可能持续整个请求 | transfer、latency、bandwidth、topology、GPU-to-GPU / GPU-aware 路径、request lifetime | NIXL、Mooncake **Transfer Engine** 可封装 RDMA/NVLink 等受支持路径；需要 connector 接入 runtime |
+| Distributed / Shared KV Cache | 不同 worker/instance 跨请求复用 prefix；保留期由价值与容量决定 | lookup、identity、admission/eviction、dedup、locality/routing、replication、capacity、failure | LMCache、Mooncake **Store**、vLLM connector ecosystem；快传输不能替代缓存管理 |
+| Durable / Cold KV Storage | 更大、更便宜、更远的冷层；耐久的是所发布 blob，是否可复用仍要检查 | Object Storage、S3 semantics、namespace、durability、capacity、Range、restore vs recompute、failure domain | 对象服务作为 backend；cold 不自动意味着 durable，保护保证由 endpoint 决定 |
+
+**P/D Transfer ≠ Distributed KV Cache ≠ Object Storage Tier。** 前者是阶段间的交接问题，中间是复用与管理服务，后者是容量/持久化后端；三者可以组合。例如 P 从共享缓存恢复前缀并计算后缀，再直接交给 D；请求结束后只把值得保留的 immutable KV 放冷层。整个过程不要求即时交接经 S3。
+
+反例：一次交接也需要 request ID、lease 和失败处理，但不因此成为带跨请求 lookup/淘汰/副本策略的共享缓存。反过来，一个支持 S3 GET 的 bucket 也不会自行理解 prefix、TP 分片或 GPU-ready。技术栈定位见[第一篇 §6.7]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#modern-kv-stack)；本表是设计判断框架，具体集成以官方版本为准。
 
 ### 1.2 五个不变量比功能列表重要
 
@@ -239,6 +254,28 @@ vLLM 当前 prefix hash 设计支持 parent hash 与额外身份信息，是本�
 | 内容仍正确但太旧/不热门 | 策略层可因 TTL/容量淘汰，不是数学上失效 |
 
 TTL 用于保留策略和清理，不能修补错误 key。模型升级用 namespace/version 隔离，新请求不再访问旧版本；旧版本等活跃引用结束后清理。不会通过“把 TTL 设短”保证模型正确性。
+
+<a id="kv-compatibility-contract"></a>
+
+### 2.5 KV Compatibility Contract：相同逻辑 KV 不保证可直接消费 — MUST KNOW
+
+**Identity compatible ≠ Representation compatible ≠ Runtime compatible。** Identity 判断是不是正确计算结果；representation 判断 bytes 的几何/编码/分片能否解释；runtime 判断 consumer 和 connector 能否在当前实现中安全安装与消费。Location 可达和 checksum 正确是另外两项，不能替代这三道检查。
+
+不再扩一套无限字段 schema，只在 §2.2 的 manifest 和传输握手中明确三组约束：
+
+| Contract | 至少核对 | 不兼容时的动作 |
+|---|---|---|
+| Identity | model identity + 权重 revision；attention architecture/位置规则；完整 prefix/input 身份与授权 | 不是同一计算结果则 miss/recompute，不能仅靠转换 dtype 修复 |
+| Representation | KV dtype、layer count、KV head count、head dimension；TP rank/head 分片；block/page layout；quantization metadata（scale 的版本、组织与可获得性） | 只有已实现且验证正确的转换/reshard 才允许恢复；否则 miss |
+| Runtime | attention backend；runtime/connector version 与协议；支持的 memory kind、布局安装和完成/可见性契约 | 先协商支持组合，禁止关闭检查来“强行兼容” |
+
+**教学例子：**同权重、同前缀，P 用 TP=2、D 用 TP=4。即使 hash 命中且网络完整搬到 GPU，某 rank 的 KV heads 范围或 page strides 仍可能错误。若 connector 明确支持该模型的 head splitting/布局转换，转换后验证再安装；若没有这种能力就重算。FP8 同 dtype 但缺 scale，也不能只靠 checksum 证明数值可用。
+
+**当前产品事实：**2026-10-03 核对的 [vLLM NixlConnector compatibility matrix](https://docs.vllm.ai/en/latest/features/nixl_connector_compatibility/)说明默认 handshake compatibility hash 检查 vLLM/connector 版本、model 几何与 dtype、attention backend、cache dtype 等。TP/block size 可在特定模型和布局约束下不同，不应概括成“必须完全相同”，更不能说任意不同都兼容。该页还区分静态量化 scale 与尚不支持的动态 scale 传输，并标明特定异构布局转换为 experimental。
+
+**通用原则与本文抽象：**上表把产品检查提炼成三道 contract，并额外要求权重 revision/内容身份核验。不宣称 vLLM 的 compatibility hash 会验证全部模型权重 bytes、tenant 或本文所有 manifest 字段；NIXL 搬运 descriptor 也不替上层证明语义一致。实现前锁定 runtime/connector/backend release 或 commit，做同输入恢复与重算的结果对照；浮动 `latest` 的支持矩阵不是长期保证。
+
+**面试追问：**“两个 worker 能连通、搬完且 checksum 相同，为什么输出仍可能错？”先分别排 identity、representation、runtime；完成/设备可见性检查还要独立成立。
 
 ### Interview Check
 
@@ -813,6 +850,22 @@ RDMA 没有 bucket/key、版本、range/multipart、对象提交或 tenant 权�
 
 若限速后 ITL 不变，就查调度和 batch 变化，不能认定所有长尾都由对象层网络导致。最终比较满足 TTFT 与 ITL 双 SLO 的 goodput，而不只展示更漂亮的命中率。
 
+<a id="inference-troubleshooting"></a>
+
+### Troubleshooting Matrix：先分段取证，再改变路径 — SHOULD KNOW
+
+| Symptom | First Hypothesis | Evidence | Next Step |
+|---|---|---|---|
+| TTFT 高 | 排队 / Prefill / KV miss / restore | request trace 的 queue、hit 类型、load-to-ready、Prefill 时间 | 固定长度与并发，分段测量；不要把整段 TTFT 归给存储 |
+| KV load 慢 | storage / network / H2D / conversion | payload throughput、GET latency、后端读放大、GPU timeline | 分测 S3→Host、resident Host→GPU，再测端到端 |
+| RDMA 慢 | topology / transport / 注册与提交 | actual backend、link/NUMA/PCIe、MR time、CQ errors | 验证实际 path 与 fallback，再固定 size/在途 bytes 做对照 |
+| GPU idle | producer feeding 不足，也可能在同步 | batch/KV ready wait、队列轨迹、copy/kernel timeline | 分开 I/O、解码/转换和 consumer；检查谁在等谁 |
+| CPU 高 | TCP/TLS / copy overhead / busy polling | CPU profile、copy bytes、poll 热点、连接复用 | 保持 payload/负载，对比路径和注册复用；不盲目换 RDMA |
+| p99 突增 | queue / contention / retry | 同一请求的 queue depth、在途 bytes、后台流量与重试日志 | 限流后台，设置 bounded queue/backpressure，观察尾延迟是否恢复 |
+| hit ratio 高但收益低 | restore > recompute 或只有 metadata hit | ready-hit、load-to-ready、avoided Prefill time | 调整 admission/locality；按成本选择重算 |
+
+第一假设不是诊断结论。把 `request_id / attempt_id / allocation generation` 串到日志与状态，配合路径计数和控制实验才能验证因果。**Go Telemetry 的已有工作是 ECS/ObjectScale 运行指标采集与统计分析**；生产故障定位需结合日志、chunk 状态（如私有 DT 证据）、路径指标与实验，不描述成“Telemetry 用来定位队列”。这延续已有生产排障方法，不冒充已有 GPU/RDMA 实机排障经历。
+
 ### 7.6 30 道题如何复习：按追问链组织
 
 | 一条主问题 | 关联答案卡 | 闭卷练习终点 |
@@ -869,7 +922,7 @@ RDMA 没有 bucket/key、版本、range/multipart、对象提交或 tenant 权�
 
 <a id="cpp-demo-scope"></a>
 
-**实现语言改为 C++17/20 + CMake，覆盖真实 S3→host 基线和最小状态机模拟。** Java 是已有生产开发经验，但本 Demo 不以 Java/Go 包裹一个“以后再用 C++ 重写”的核心链路。先交付少量可编译、可测试的 C++ 类型：对象请求、拥有 payload 的 buffer/lease、transfer attempt 与完成状态；用 RAII 保护资源，异步完成之前不返还底层槽位。不要求一个月内精通现代 C++、实现 CUDA kernel 或写 RDMA driver。普通 CPU 机器可完成 S3 与模拟测试；真实 GPU/RNIC、支持扩展的 S3 endpoint 到位后才尝试 cuObject 等 C++ 集成，不能把普通 C++ S3 SDK 请求称为 S3 over RDMA。
+**实现语言改为 C++17/20 + CMake，覆盖真实 S3→host 基线和最小状态机模拟。** Java 是已有生产开发经验，但本 Demo 不以 Java/Go 包裹一个“以后再用 C++ 重写”的核心链路。Python 负责 workload/benchmark/orchestration，Go 仅作为可选控制面/telemetry；不把 C++ 写成过去 Dell 主力。先交付少量可编译、可测试的 C++ 类型：对象请求、拥有 payload 的 buffer/lease、transfer attempt 与完成状态；用 RAII 保护资源，异步完成之前不返还底层槽位。不要求一个月内精通现代 C++、实现 CUDA kernel 或写 RDMA driver。普通 CPU 机器可完成 S3 与模拟测试；真实 GPU/RNIC、支持扩展的 S3 endpoint 到位后才尝试 cuObject 等 C++ 集成，不能把普通 C++ S3 SDK 请求称为 S3 over RDMA。
 
 ### 8.2 组件架构
 
@@ -1077,17 +1130,77 @@ M0 的上传是测试准备，不要求首个 C++ 程序同时实现 PUT；若�
 
 <a id="kv-demo-experiments"></a>
 
-### 8.11 最小可讲版本：三条实验，不做完整平台
+### 8.11 Demo Evidence：三个小实验，不做完整平台
 
-先把 §8.3 的若干类型合并为少量记录对象即可，别为每种 ID/proof 单独建立框架。单进程目录、固定模型与布局、三个容量池已经能跑出核心行为。
+以下是**实验设计与验收规格**，不是已实现/通过报告。现有 C++ ownership 与只读 Range probe 只证明入门子项；A 的计算片段可直接运行，B/C 仍需实现。先保留 §8.6 的小容量/共享场景作为 fixture，再选 A/B/C，不引入真实模型、集群目录或 Kubernetes。M1 默认不额外加入本月预算。
 
-| 实验 | 输入与操作 | 必须能解释的输出 |
+<a id="restore-recompute-experiment"></a>
+
+#### Experiment A：Restore vs Recompute
+
+输入：prefix length、KV bytes/token（或显式 KV size）、有效 network/backend 带宽、storage 固定 latency、queue/conversion/visibility 成本、estimated prefill compute cost。缺少 profiler 时，Prefill 必须标为估计，不能由 token 比例冒充实测。
+
+在**串行简化模型**中：`restore_ms = fixed_ms + KV_GiB / effective_GiBps × 1000`；`recompute_ms = prefill_ms + compute_queue_ms`。effective bandwidth 若只取 NIC 带宽，会低估 storage/H2D/转换瓶颈；固定 latency 不应重复计入已测的端到端吞吐。pipeline 模型另用 trace，不混在这条公式里。
+
+可直接运行的 Python 分析片段（教学输入，数据主路径仍用 C++）：
+
+```python
+bytes_per_token = 128 * 1024
+fixed_ms, prefill_ms = 5.0, 60.0
+for tokens in (2048, 8192, 32768):
+    gib = tokens * bytes_per_token / 2**30
+    # 此处每档同用 60 ms 是独立给定输入，不是长度→算力预测。
+    crossover = gib / ((prefill_ms - fixed_ms) / 1000)
+    for bandwidth in (8.0, 20.0, 40.0):
+        restore_ms = fixed_ms + gib / bandwidth * 1000
+        decision = "restore" if restore_ms < prefill_ms else "recompute"
+        print(tokens, bandwidth, round(restore_ms, 3), prefill_ms,
+              round(crossover, 3), decision)
+```
+
+8,192 tokens 一行应为 1 GiB：8/20/40 GiB/s 分别得到 130/55/30 ms，临界带宽约 18.18 GiB/s；相等时无延迟收益。若 `recompute_ms <= fixed_ms`，这个模型没有有限正临界带宽，应直接判不值得恢复，而不是输出负带宽。也可扫描长度：固定 bytes/token 与成本假设下 `T_cross = (recompute_ms-fixed_ms)/1000 × B × 2^30 / bytes_per_token`；实际 prefill 随长度变化时改用测量表求交点。
+
+**证据交付：**保存每档输入与 `restore_ms/recompute_ms/crossover/decision` 的 CSV；至少一档命中仍重算，至少一档恢复胜出。参数模型只证明决策逻辑；真实 S3→Host 测量不能直接填成 GPU-ready 时间。
+
+<a id="async-pipeline-experiment"></a>
+
+#### Experiment B：Async Data Pipeline
+
+最小路径：`Range GET → owning buffer → bounded ready queue → CPU consumer → release`。先用现有本地 HTTP fixture 与确定性 bytes，接到 C++ 两槽 buffer pool；每个槽位全生命周期为 `FREE → FILLING → VERIFIED → CONSUMING → FREE`。消费可先做逐字节校验/摘要，最后释放 ownership；普通 vector 不是 pinned/GPU memory。
+
+| 控制变量 | 最小扫描 | 要观察的证据 |
 |---|---|---|
-| 重用与容量压力 | 两组公共 prefix 加独有后缀，GPU pool 设小；按固定序列重复请求 | 哪些页共享、谁被驱逐、从哪层恢复、为什么选择恢复 |
-| 恢复不划算 | 同一 workload 分别用高/低带宽模型，或调低重算成本 | 临界点一侧恢复、另一侧重算；显示输入假设和分解时间 |
-| 部分失败与迟到写 | 旧 attempt 写一半超时，新 attempt 到独立目标，旧事件随后到达 | 旧目标一直隔离、新目标 checksum 正确、最终没有遗留 lease |
+| Chunk size | 64 KiB / 1 MiB / 8 MiB；固定总 bytes | GET 固定成本、请求数、校验成本、有效吞吐 |
+| Concurrency | 1 / 2 outstanding，pool 固定 2 slots | producer/consumer 是否真正重叠，不为每个请求新建无限 buffer |
+| Queue / backpressure | ready queue capacity 1；人为让 consumer 变慢 | queue depth、free slots、producer wait；队列不能无界增长 |
+| Ownership / lifetime | lease 从 GET context 转给 consumer | consumer_done 前不得覆盖；trace 包含 slot、generation 和 attempt |
 
-这三条属于 **M1 的模拟正确性证据**；若只完成 M0，就只展示真实 S3 Range GET、checksum 和 host 路径耗时，不宣称已经验证 KV 状态机。尚未实现时按设计题口述预期，不宣称实验通过。真实 GPU、全量 benchmark 矩阵和集群目录另行扩展；§8.9 的完整 correctness 表作为扩展验收清单。
+每次请求校验 206、Content-Range、长度和 bytes 后才入队；失败 buffer 不发布。设计日志字段：`submit/body_done/verified/enqueue/consume_start/consume_done/release` 的单调时钟、offset/length、slot/generation、queue depth、inflight bytes。报告 `verified payload / 整轮 wall time`，同时保留各段耗时、峰值 pool bytes 和 producer wait；单请求 submit 用时不能冒充吞吐。
+
+**验收：**固定数据/总量，对比串行与两槽异步；允许负收益。慢 consumer 下 trace 应显示生产者等待、pool bytes 有界、consumer 尚未结束时槽位不可复用。HTTP fixture 的睡眠只能制造被标注的故障/慢阶段，不能解释成真实网络特征；连接复用与线程调度条件一并记录。接真实测试 S3 后才称 host integration，仍不证明 H2D/RDMA。
+
+与 ECS chunk replication / Tech Refresh 的连接是**有界在途资源、chunk 粒度、后台搬运与 consumer 的进度协调**。经验可迁移；本实验是前台 Range pipeline，过去的复制/迁移不是 GPU transfer，完成、硬件和 SLO 不等价。
+
+<a id="failure-injection-experiment"></a>
+
+#### Experiment C：Failure Injection
+
+在 M1 用确定性事件/屏障注入，不靠随机 sleep。将 `caller timeout` 与 `physical work drained` 分为两个事件；模拟 worker 真正持有旧目标 owner，故意允许 timeout 后继续写它，验证 quarantine。不要让 mock 自动拒绝旧 generation 从而绕过最危险的晚到写。
+
+| 注入 | 预期不变量 / 可观察证据 |
+|---|---|
+| timeout | 调用方失败，但 old target 仍 pinned/quarantined；allocated bytes 尚未下降 |
+| retry | 新 attempt 使用独立 allocation；每次都重新核对 range/bytes；旧 attempt 不得覆盖新发布 |
+| duplicate request / duplicate completion | 同 key single-flight 或条件发布；每个 ticket 终结一次、publish/release 计数不重复，lease 不下溢 |
+| late completion / late write | 旧 callback 不改变新状态；旧实际写只能落旧 allocation，drain 后才回收 |
+| consumer failure | 已开始消费的 target 保活到 consumer 实际停止；通知失败本身不允许提前复用 |
+| partial failure | 写完半块或多块中一块失败，都不能把完整 prefix 标 READY；已成功块是否单独可复用须有独立完整块 proof |
+
+最小 trace 的**期望时序**：`old submit → partial → caller timeout → quarantine(old) → retry(new) → verify(new) → publish(new) → late_write(old) → drain(old) → release(old) → consumer_done(new) → release(new)`。不是实测记录。若测试仅把旧 generation 的回调丢弃，却允许旧设备写入 reused 地址，仍不合格。
+
+**证据交付：**对六种注入各保存事件 trace、旧/新 allocation ID、发布次数、内容校验、峰值资源和退出后 `inflight/leases/reservations=0`。至少断言旧 target 在 drain 前不可借出、新内容未受污染、半块不发布。重复通知不得 double-free；资源耗尽时 bounded retry/backpressure，不能无限分配新 buffer 来“安全重试”。
+
+最终回答是：**timeout ≠ DMA / async work 真正停止；logical failure、transfer drain、consumer completion 是不同回收条件。** CPU 模拟证明这套协议在该事件模型内成立；真实 CUDA/RDMA 必须重新验证取消、memory registration、visibility 与 drain 契约。
 
 <a id="s3-host-probe"></a>
 
@@ -1109,7 +1222,7 @@ M0 的上传是测试准备，不要求首个 C++ 程序同时实现 PUT；若�
 
 **2 分钟回答**
 
-方案以 C++ 为唯一核心实现语言：M0 真实验证 S3 Range GET→host buffer 的内容、范围、重试和耗时；有余力再用 M1 的小尺寸 bytes 与事件模型验证 KV key、容量、lease、半块不发布和超时后旧写不污染新请求。只有做过的阶段才能用完成时态描述，M0 实测与 M1 模拟分开报告，模型参数和负收益都披露。真正 GPU/RDMA 对照须在支持的硬件及对象服务端另行完成；MockRdma 或现成 S3 SDK 请求不是 GPU-direct 性能证据。
+方案以 C++ 为数据路径核心，Python 做 workload/benchmark/orchestration，Go 仅可选控制面或 telemetry：M0 真实验证 S3 Range GET→host buffer 的内容、范围、重试和耗时；有余力再用 M1 的小尺寸 bytes 与事件模型验证 KV key、容量、lease、半块不发布和超时后旧写不污染新请求。只有做过的阶段才能用完成时态描述，M0 实测与 M1 模拟分开报告，模型参数和负收益都披露。真正 GPU/RDMA 对照须在支持的硬件及对象服务端另行完成；MockRdma 或现成 S3 SDK 请求不是 GPU-direct 性能证据。
 
 **Deep Dive**
 

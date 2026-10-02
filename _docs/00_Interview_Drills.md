@@ -108,7 +108,10 @@ description: 用诊断、随机变体、限时口述和错题复测，把三份�
 3. **L3：**确认 direct path 生效、host DRAM traffic 降低，但 end-to-end latency 不变。按优先级列出下一轮实验。
 4. **布局题：**对象是连续 64 MiB blob，attention 需要分散 pages；比较直接 scatter 与 GPU staging+转换。
 
+5. **NIXL — SHOULD KNOW：**用六个职责定位 NIXL、RDMA、UCX、LMCache、Mooncake TE/Store、vLLM connector；解释为什么传输抽象不能替代缓存策略。UCX 只要求层次定位（NICE TO KNOW），不背配置/API。
+
 核对：[Document 2 §6～8]({{ site.baseurl }}/docs/02_GPU_Data_Path/#chapter-6)。
+NIXL 核对：[六问收口]({{ site.baseurl }}/docs/02_GPU_Data_Path/#nixl-interview)。
 
 ### 链 F：对象语义怎样与 RDMA data plane 共存
 
@@ -126,7 +129,10 @@ description: 用诊断、随机变体、限时口述和错题复测，把三份�
 3. **L3：**对象层失效后所有 miss 改为重算。如何避免 Prefill 风暴拖垮仍在 Decode 的请求？
 4. **规模题：**目录 page 粒度产生 512 次 lookup；在不改变 GPU page 大小的前提下降低 metadata 放大。
 
+5. **Compatibility — MUST KNOW：**同模型名、同 tokens、checksum 正确，但 TP/layout/backend 或量化 scale 不同。分别判断 identity、representation、runtime；哪些可转换，哪些必须 miss？当前产品支持与设计原则如何区分？
+
 核对：[Document 3 §1～6]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#chapter-1)。
+兼容性核对：[Contract]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#kv-compatibility-contract)。
 
 <a id="cold-kv-drill"></a>
 
@@ -139,6 +145,9 @@ description: 用诊断、随机变体、限时口述和错题复测，把三份�
 3. **L3：**重算突然降到 60 ms，或后端 EC read amplification 令对象→Host 只有 2 GiB/s。分别重新决策；RDMA 能省掉哪段，为什么它可能救不了后端瓶颈？提出一个 A/B 测量。
 4. **故障：**RDMA 只写完一半便 timeout；同时第二个请求复用同一 Prefix。怎样隔离旧目标、single-flight/独立 retry、控制重算风暴，并确认何时可以发布或回收 buffer？
 5. **证据：**报告 `load-to-GPU-ready p99`、TTFT/ITL goodput、避免的 Prefill GPU 时间、对象读放大及 host/PCIe/NIC 流量。若手上只有 Mac 上的真实 S3→Host probe 和 CPU 模拟，应分别说明它们能证明什么。
+
+6. **场景收口 — MUST KNOW：**把 P/D Transfer、Distributed KV Cache、Object Storage Tier 放进同一请求流程，指出不同目的与生命周期；不能只给三个产品名。
+7. **无硬件证据：**A 给出命中却重算的参数点；B 慢 consumer 时画 queue/free slots；C 画 timeout→late write→drain。按[排障矩阵]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#inference-troubleshooting)对 GPU idle 或 p99 spike 提出可证伪实验。已运行与待实现分别报告。
 
 核对：[Document 1 §7.4]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#chapter-7) → [Document 2 §7.9]({{ site.baseurl }}/docs/02_GPU_Data_Path/#chapter-7) → [Document 3 §1.6、§8.12]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#chapter-1)。
 
@@ -195,8 +204,8 @@ description: 用诊断、随机变体、限时口述和错题复测，把三份�
 |---|---|---|
 | Day 7 | 链 A/B；两组随机 KV 算题；画分页共享图 | 容量与共享计算均正确，能解释 restore vs recompute |
 | Day 14 | 链 C/D；画三条 GPU path 与一次 RDMA WRITE | source/target lifetime、lkey/rkey 和 completion 无方向错误 |
-| Day 21 | 链 E/F；64 MB/64 MiB 传输题；一次故障重试 | 不混淆 GDR/GDS/S3，不把 timeout 当硬件停止 |
-| Day 26 | 45 分钟系统设计 + 15 分钟追问，包含链 H | 同一冷 Prefix 从恢复/重算走到 GPU Ready，预算、状态机、失败和验证全部闭合 |
+| Day 21 | 链 E/F，含 NIXL 六问；64 MB/64 MiB 传输题；一次故障重试 | 不混淆 GDR/GDS/S3；NIXL SHOULD KNOW 达机制深度，不把 timeout 当硬件停止 |
+| Day 26 | 45 分钟系统设计 + 15 分钟追问，包含链 G/H | 区分三类远端 KV；冷 Prefix 兼容、恢复/重算、GPU Ready 与 A/B/C 证据边界闭合 |
 | Day 29 | 随机十题，其中五题用英文 | 每题至少 2 分；核心不变量无 0 分 |
 
 ### 已有项目也要闭卷，不只练新名词
