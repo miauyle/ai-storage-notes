@@ -1,6 +1,6 @@
 source "https://rubygems.org"
 
-gem "jekyll-theme-docsteer", "~> 1.0"
+gem "jekyll-theme-docsteer", "= 1.1.1"
 gem "jekyll", "~> 4.3"
 
 group :jekyll_plugins do
