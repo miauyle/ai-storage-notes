@@ -1,17 +1,17 @@
-name: Deploy site
+name: Build, verify and deploy docs
 
 on:
   push:
+    branches: [master]
+  pull_request:
     branches: [master]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: docs-\${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,20 +19,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.3"
+          ruby-version: '3.3'
           bundler-cache: true
-
-      - id: pages
-        uses: actions/configure-pages@v5
-
-      - name: Build
-        run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path }}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare local math and diagram assets
+        run: |
+          npm install --prefix "$RUNNER_TEMP/site-deps" --no-audit --no-fund --ignore-scripts katex@0.16.22 mermaid@11.6.0 playwright@1.51.1
+          mkdir -p assets/vendor/katex assets/vendor/mermaid
+          cp "$RUNNER_TEMP/site-deps/node_modules/katex/dist/katex.min.js" "$RUNNER_TEMP/site-deps/node_modules/katex/dist/katex.min.css" assets/vendor/katex/
+          cp -r "$RUNNER_TEMP/site-deps/node_modules/katex/dist/fonts" assets/vendor/katex/
+          cp -r "$RUNNER_TEMP/site-deps/node_modules/mermaid/dist/." assets/vendor/mermaid/
+      - name: Build Jekyll
         env:
           JEKYLL_ENV: production
-
+        run: bundle exec jekyll build --baseurl /ai-storage-notes
+      - name: Check rendered links
+        run: python scripts/check_site_links.py _site /ai-storage-notes
+      - name: Browser verification
+        env:
+          BASEURL: /ai-storage-notes
+          EXPECTED_LOGO: logo-theme.svg
+          EXPECTED_FAVICON: favicon-storage.svg
+          EXPECTED_GROUPS: "5"
+          EXPECTED_TOPICS: "8"
+        run: |
+          "$RUNNER_TEMP/site-deps/node_modules/.bin/playwright" install --with-deps chromium
+          NODE_PATH="$RUNNER_TEMP/site-deps/node_modules" node scripts/check_brand_ui.cjs
       - name: Validate Edit this page links
         run: |
           ruby <<'RUBY'
@@ -61,17 +77,22 @@ jobs:
           abort errors.join("\n") unless errors.empty?
           puts "Validated #{links.length} Edit this page links."
           RUBY
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
   deploy:
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: \${{ steps.deployment.outputs.page_url }}
     steps:
-      - id: deployment
+      - uses: actions/configure-pages@v5
+      - name: Deploy
+        id: deployment
         uses: actions/deploy-pages@v4
