@@ -1,4 +1,9 @@
 <link rel="stylesheet" href="{{ '/assets/css/knowledge-map.css' | relative_url }}">
+{% if page.has_math %}
+<link rel="stylesheet" href="{{ '/assets/vendor/katex/katex.min.css' | relative_url }}">
+<script src="{{ '/assets/vendor/katex/katex.min.js' | relative_url }}" defer></script>
+{% endif %}
+<script src="{{ '/assets/js/knowledge-docs.js' | relative_url }}" data-mermaid-src="{{ '/assets/vendor/mermaid/mermaid.esm.min.mjs' | relative_url }}" defer></script>
 <style>
   .brand__logo {
     width: 26px;
