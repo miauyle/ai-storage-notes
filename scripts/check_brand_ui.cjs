@@ -67,47 +67,7 @@ const root = 'http://127.0.0.1:8765' + baseurl;
 
     const favicon = page.locator('link[rel="icon"]');
     assert.equal(await favicon.count(), 1, 'favicon link exists');
-    assert.match(await favicon.getAttribute('href'), new RegExp(expectedFavicon.replace('.', '\\.') + '\\?v=[0-9a-f]{12});
-
-    const initialBackground = await brandLogo.evaluate(node => getComputedStyle(node).backgroundImage);
-    assert.notEqual(initialBackground, 'none', 'brand logo has theme gradient');
-
-    await page.locator('#skinPicker > .navbar__icon-btn').click();
-    await page.locator('[data-skin-set="violet"]').click();
-    assert.equal(await page.locator('html').getAttribute('data-skin'), 'violet');
-
-    const violetBackground = await brandLogo.evaluate(node => getComputedStyle(node).backgroundImage);
-    assert.notEqual(violetBackground, initialBackground, 'brand logo follows active skin');
-
-    await page.setViewportSize({ width: 2560, height: 1440 });
-    await page.goto(root + '/', { waitUntil: 'networkidle' });
-    assert.ok(await page.locator('.knowledge-home').evaluate(node => node.getBoundingClientRect().width >= 1470), 'wide homepage uses desktop space');
-    assert.ok(await page.locator('html').evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 16.9), 'wide desktop root type scale');
-    const docResponse = await page.goto(root + "/docs/01_AI_Storage_KV_Cache/", { waitUntil: 'networkidle' });
-    assert.equal(docResponse.status(), 200);
-    assert.ok(await page.locator('.page-shell').evaluate(node => node.getBoundingClientRect().width >= 1600), 'wide documentation shell');
-    assert.ok(await page.locator('#sidebar .sidebar__link').first().evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 14.5), 'wide sidebar type is readable');
-    assert.ok(await page.locator('.toc').evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 14.5), 'wide TOC type is readable');
-
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(root + '/', { waitUntil: 'networkidle' });
-    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'mobile page overflow');
-
-    console.log(JSON.stringify({
-      ok: true,
-      logo: await brandLogo.getAttribute('src'),
-      favicon: await favicon.getAttribute('href'),
-      skin: 'aqua -> violet'
-    }));
-  } finally {
-    if (browser) await browser.close();
-    server.kill();
-  }
-})().catch(error => {
-  console.error(error);
-  process.exitCode = 1;
-});
-));
+    assert.match(await favicon.getAttribute('href'), new RegExp(expectedFavicon.replace('.', '\\.') + '\\?v=[0-9a-f]{12}$'));
 
     const initialBackground = await brandLogo.evaluate(node => getComputedStyle(node).backgroundImage);
     assert.notEqual(initialBackground, 'none', 'brand logo has theme gradient');
