@@ -3,7 +3,7 @@ main:
     url: /docs/00_Study_Guide/
     icon: fa-solid fa-compass
   - title: 文档
-    url: /docs/01_AI_Storage_KV_Cache/
+    url: /docs/
     icon: fa-solid fa-book
   - title: 训练
     url: /docs/00_Interview_Drills/
