@@ -1,5 +1,6 @@
 /* Verify DocSteer brand assets in a real Chromium browser. */
 const { chromium } = require('playwright');
+const { checkBrandIcons } = require('../maintenance/check_brand_icons.cjs');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -63,9 +64,9 @@ const root = 'http://127.0.0.1:8765' + baseurl;
 
     const brandLogo = page.locator('.navbar .brand__logo');
     assert.equal(await brandLogo.count(), 1, 'navbar brand logo exists');
-    assert.match(await brandLogo.getAttribute('src'), new RegExp(expectedLogo.replace('.', '\\.') + '$'));
+    assert.match(await brandLogo.getAttribute('src'), new RegExp(expectedLogo.replace('.', '\\.') + '\\?v=[0-9a-f]{12}$'));
 
-    const favicon = page.locator('link[rel="icon"]');
+    const favicon = page.locator('link[rel="icon"][type="image/svg+xml"]');
     assert.equal(await favicon.count(), 1, 'favicon link exists');
     assert.match(await favicon.getAttribute('href'), new RegExp(expectedFavicon.replace('.', '\\.') + '\\?v=[0-9a-f]{12}$'));
 
@@ -79,6 +80,7 @@ const root = 'http://127.0.0.1:8765' + baseurl;
     const violetBackground = await brandLogo.evaluate(node => getComputedStyle(node).backgroundImage);
     assert.notEqual(violetBackground, initialBackground, 'brand logo follows active skin');
 
+    await checkBrandIcons(page, root);
     await page.setViewportSize({ width: 2560, height: 1440 });
     await page.goto(root + '/', { waitUntil: 'networkidle' });
     assert.ok(await page.locator('.knowledge-home').evaluate(node => node.getBoundingClientRect().width >= 1470), 'wide homepage uses desktop space');
@@ -90,6 +92,7 @@ const root = 'http://127.0.0.1:8765' + baseurl;
     assert.ok(await page.locator('.toc').evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 14.5), 'wide TOC type is readable');
 
     await page.setViewportSize({ width: 390, height: 844 });
+    await checkBrandIcons(page, root);
     await page.goto(root + '/', { waitUntil: 'networkidle' });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'mobile page overflow');
 

@@ -105,6 +105,7 @@ feed:
   path: feed.xml
 
 exclude:
+  - maintenance
   - Gemfile
   - Gemfile.lock
   - vendor

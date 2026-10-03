@@ -1,0 +1,59 @@
+{%- assign cfg = site.docsteer -%}
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+
+  {%- comment -%} Set skin / mode before paint to avoid a flash {%- endcomment -%}
+  <script>
+    (function () {
+      try {
+        var r = document.documentElement;
+        var m = localStorage.getItem('docsteer-mode');
+        var s = localStorage.getItem('docsteer-skin');
+        if (m) r.setAttribute('data-mode', m);
+        if (s) r.setAttribute('data-skin', s);
+      } catch (e) {}
+    })();
+  </script>
+
+  {% seo %}
+
+  {% for icon in site.data.brand_icons %}
+    <link rel="{{ icon.rel }}" type="{{ icon.type }}" sizes="{{ icon.sizes }}" href="{{ icon.url | relative_url }}">
+  {% endfor %}
+
+  {% if cfg.fontawesome.enabled %}
+    {% if cfg.fontawesome.source == "cdn" %}
+      <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+      <link rel="stylesheet" href="{{ cfg.fontawesome.cdn_url }}"
+            {% if cfg.fontawesome.cdn_integrity and cfg.fontawesome.cdn_integrity != "" %}integrity="{{ cfg.fontawesome.cdn_integrity }}" crossorigin="anonymous" referrerpolicy="no-referrer"{% endif %}>
+    {% else %}
+      {%- assign fa_css = '/assets/vendor/fontawesome/css/all.min.css' | relative_url -%}
+      <link rel="preload" as="font" type="font/woff2" crossorigin
+            href="{{ '/assets/vendor/fontawesome/webfonts/fa-solid-900.woff2' | relative_url }}">
+      <link rel="stylesheet" href="{{ fa_css }}">
+    {% endif %}
+  {% endif %}
+
+  <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}?v={{ ds_version }}">
+
+  {% if site.feed.path %}
+    <link rel="alternate" type="application/atom+xml" title="{{ site.title }}" href="{{ '/feed.xml' | relative_url }}">
+  {% endif %}
+
+  {% if cfg.search.enabled %}
+    <link rel="preload" as="fetch" href="{{ '/search.json' | relative_url }}?v={{ ds_index_v }}" crossorigin>
+  {% endif %}
+
+  {% if cfg.analytics.plausible_domain %}
+    <script defer data-domain="{{ cfg.analytics.plausible_domain }}" src="https://plausible.io/js/script.js"></script>
+  {% endif %}
+  {% if cfg.analytics.ga4_id %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ cfg.analytics.ga4_id }}"></script>
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','{{ cfg.analytics.ga4_id }}');</script>
+  {% endif %}
+
+  {% include head-custom.html %}
+</head>

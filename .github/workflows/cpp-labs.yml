@@ -32,6 +32,8 @@ jobs:
         with:
           ruby-version: "3.3"
           bundler-cache: true
+      - name: Prepare browser icon renderer
+        run: python3 -m pip install cairosvg==2.8.2
       - name: Build documentation without deploying
         run: bundle exec jekyll build --baseurl /ai-storage-notes
         env:

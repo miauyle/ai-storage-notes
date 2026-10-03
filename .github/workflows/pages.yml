@@ -33,6 +33,8 @@ jobs:
           cp "$RUNNER_TEMP/site-deps/node_modules/katex/dist/katex.min.js" "$RUNNER_TEMP/site-deps/node_modules/katex/dist/katex.min.css" assets/vendor/katex/
           cp -r "$RUNNER_TEMP/site-deps/node_modules/katex/dist/fonts" assets/vendor/katex/
           cp -r "$RUNNER_TEMP/site-deps/node_modules/mermaid/dist/." assets/vendor/mermaid/
+      - name: Prepare browser icon renderer
+        run: python3 -m pip install cairosvg==2.8.2
       - name: Build Jekyll
         env:
           JEKYLL_ENV: production
