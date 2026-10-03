@@ -14,3 +14,4 @@ fixture*.bin
 *.presigned
 __pycache__/
 *.pyc
+assets/images/generated-icons/
