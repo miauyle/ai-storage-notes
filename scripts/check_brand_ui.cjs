@@ -53,6 +53,14 @@ const root = 'http://127.0.0.1:8765' + baseurl;
     assert.equal(await page.locator('.knowledge-groups').evaluate(node => getComputedStyle(node).display), 'grid');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'desktop page overflow');
 
+    const docsNav = page.locator('.navbar a').filter({ hasText: '文档' }).first();
+    assert.equal(await docsNav.count(), 1, 'navbar docs entry exists');
+    assert.equal(await docsNav.getAttribute('href'), baseurl + '/docs/', 'navbar docs entry points to full catalog');
+    const docsResponse = await page.goto(root + '/docs/', { waitUntil: 'networkidle' });
+    assert.equal(docsResponse.status(), 200, 'full catalog loads');
+    assert.match(await page.locator('h1').textContent(), /完整目录/, 'full catalog title');
+    await page.goto(root + '/', { waitUntil: 'networkidle' });
+
     const brandLogo = page.locator('.navbar .brand__logo');
     assert.equal(await brandLogo.count(), 1, 'navbar brand logo exists');
     assert.match(await brandLogo.getAttribute('src'), new RegExp(expectedLogo.replace('.', '\\.') + '$'));
