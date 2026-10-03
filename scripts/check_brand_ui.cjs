@@ -67,7 +67,7 @@ const root = 'http://127.0.0.1:8765' + baseurl;
 
     const favicon = page.locator('link[rel="icon"]');
     assert.equal(await favicon.count(), 1, 'favicon link exists');
-    assert.match(await favicon.getAttribute('href'), new RegExp(expectedFavicon.replace('.', '\\.') + '$'));
+    assert.match(await favicon.getAttribute('href'), new RegExp(expectedFavicon.replace('.', '\\.') + '\\?v=[0-9a-f]{12}$'));
 
     const initialBackground = await brandLogo.evaluate(node => getComputedStyle(node).backgroundImage);
     assert.notEqual(initialBackground, 'none', 'brand logo has theme gradient');
