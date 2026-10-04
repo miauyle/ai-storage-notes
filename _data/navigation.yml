@@ -1,4 +1,7 @@
 main:
+  - title: 知识地图
+    url: /#knowledge-map
+    icon: fa-solid fa-diagram-project
   - title: 使用指南
     url: /docs/00_Study_Guide/
     icon: fa-solid fa-compass
