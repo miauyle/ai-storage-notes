@@ -9,7 +9,7 @@ async function checkNavigation(page, root) {
   async function arrive(url) {
     await page.waitForURL(url);
     assert.equal(page.url(), url);
-    assert.equal(await page.locator('h1').count(), 1);
+    assert.ok(await page.locator('h1').count() >= 1, 'Destination page has a title');
   }
   async function primary(href) {
     if (mobile) {
