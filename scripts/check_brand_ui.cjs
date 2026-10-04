@@ -1,6 +1,7 @@
 /* Verify DocSteer brand assets in a real Chromium browser. */
 const { chromium } = require('playwright');
 const { checkBrandIcons } = require('../maintenance/check_brand_icons.cjs');
+const { checkNavigation } = require('../maintenance/check_navigation.cjs');
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -82,6 +83,7 @@ const root = 'http://127.0.0.1:8765' + baseurl;
 
     await checkBrandIcons(page, root);
     await page.setViewportSize({ width: 2560, height: 1440 });
+    await checkNavigation(page, root);
     await page.goto(root + '/', { waitUntil: 'networkidle' });
     assert.ok(await page.locator('.knowledge-home').evaluate(node => node.getBoundingClientRect().width >= 1470), 'wide homepage uses desktop space');
     assert.ok(await page.locator('html').evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 16.9), 'wide desktop root type scale');
@@ -93,6 +95,7 @@ const root = 'http://127.0.0.1:8765' + baseurl;
 
     await page.setViewportSize({ width: 390, height: 844 });
     await checkBrandIcons(page, root);
+    await checkNavigation(page, root);
     await page.goto(root + '/', { waitUntil: 'networkidle' });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'mobile page overflow');
 
