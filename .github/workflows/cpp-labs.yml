@@ -13,7 +13,7 @@ jobs:
   cpu-and-http-contracts:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y cmake g++ libcurl4-openssl-dev
       - name: Configure
@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
@@ -40,9 +40,10 @@ jobs:
           JEKYLL_ENV: production
       - name: Check rendered documentation links and anchors
         run: python3 scripts/check_site_links.py _site /ai-storage-notes
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
+          package-manager-cache: false
       - name: Browser brand verification
         env:
           BASEURL: /ai-storage-notes
