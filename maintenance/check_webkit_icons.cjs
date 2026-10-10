@@ -15,8 +15,8 @@ const { checkBrandIcons } = require('./check_brand_icons.cjs');
     let url = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
     if (!url.startsWith(base + '/')) { res.writeHead(404).end(); return; }
     let file = path.resolve(site, '.' + url.slice(base.length));
-    if (!file.startsWith(site + path.sep)) { res.writeHead(404).end(); return; }
     if (url.endsWith('/')) file = path.join(file, 'index.html');
+    if (!file.startsWith(site + path.sep)) { res.writeHead(404).end(); return; }
     if (!fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404).end(); return; }
     res.setHeader('Content-Type', mime[path.extname(file)] || 'application/octet-stream');
     fs.createReadStream(file).pipe(res);
