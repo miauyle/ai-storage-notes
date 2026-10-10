@@ -36,7 +36,7 @@ async function boundedStyle(page, content, href) {
       console.log(`Theme icons: reading compiled CSS ${href}.`);
       await boundedStyle(page, fs.readFileSync(file, 'utf8'), href);
     }
-    source = await page.locator('link[rel="icon"][type="image/svg+xml"]').getAttribute('href');
+    source = await page.locator('link[data-static-brand-icon][type="image/svg+xml"]').getAttribute('href');
     palettes = await page.evaluate(() => {
       const root = document.documentElement;
       const defaultSkin = root.getAttribute('data-skin');

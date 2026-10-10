@@ -38,6 +38,9 @@ async function checkDynamicFavicon(page, root, documentUrl) {
   const initial = await snapshot();
   assert.equal(initial.width, 64);
   assert.equal(initial.count, 1);
+  // Initial icons must be parser-created, with no active default-color candidates.
+  assert.equal(await page.locator('[data-favicon-parser-icon]').count(), 2);
+  assert.equal(await page.locator('[data-static-brand-icon][rel="icon"],[data-static-brand-icon][rel="apple-touch-icon"]').count(), 0);
   const script = await page.locator('[data-favicon-script]').getAttribute('src');
   const scriptBody = await (await page.request.get(new URL(script, page.url()).href)).body();
   assert.equal(new URL(script, page.url()).searchParams.get('v'), createHash('sha256').update(scriptBody).digest('hex').slice(0, 12));
@@ -70,6 +73,7 @@ async function checkDynamicFavicon(page, root, documentUrl) {
   const violet = await snapshot();
   await page.reload({ waitUntil: 'networkidle' });
   assert.equal((await snapshot()).palette, violet.palette, 'Saved skin survives reload');
+  assert.equal(await page.locator('[data-favicon-parser-icon]').count(), 2, 'Saved theme icons are declared during parsing');
   for (const url of [root + '/docs/', documentUrl, root + '/']) {
     await page.goto(url, { waitUntil: 'networkidle' });
     assert.equal((await snapshot()).palette, violet.palette, 'Saved skin across routes');
@@ -107,6 +111,14 @@ async function checkDynamicFavicon(page, root, documentUrl) {
     assert.equal(await failed.locator('link[rel="icon"]').count(), 3, 'PNG failure restores static icons');
     assert.equal(await failed.locator('link[rel="apple-touch-icon"]').count(), 1, 'PNG failure restores Apple icon');
   } finally { await failedContext.close(); }
+  const blockedContext = await page.context().browser().newContext();
+  try {
+    const blocked = await blockedContext.newPage();
+    await blocked.route('**/assets/js/favicon-accent.js*', route => route.abort());
+    await blocked.goto(root + '/', { waitUntil: 'networkidle' });
+    assert.equal(await blocked.locator('link[rel="icon"]').count(), 3, 'Script load error restores static icons');
+    assert.equal(await blocked.locator('link[rel="apple-touch-icon"]').count(), 1);
+  } finally { await blockedContext.close(); }
   const noJS = await page.context().browser().newContext({ javaScriptEnabled: false });
   try {
     const fallback = await noJS.newPage();

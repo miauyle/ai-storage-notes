@@ -21,8 +21,13 @@
   {% seo %}
 
   {% for icon in site.data.brand_icons %}
-    <link data-static-brand-icon rel="{{ icon.rel }}" type="{{ icon.type }}" sizes="{{ icon.sizes }}" href="{{ icon.url | relative_url }}">
+    <link data-static-brand-icon data-static-rel="{{ icon.rel }}" rel="" type="{{ icon.type }}" sizes="{{ icon.sizes }}" href="{{ icon.url | relative_url }}">
   {% endfor %}
+  <noscript>
+  {% for icon in site.data.brand_icons %}
+    <link rel="{{ icon.rel }}" type="{{ icon.type }}" sizes="{{ icon.sizes }}" href="{{ icon.url | relative_url }}">
+  {% endfor %}
+  </noscript>
 
   {% if cfg.fontawesome.enabled %}
     {% if cfg.fontawesome.source == "cdn" %}
