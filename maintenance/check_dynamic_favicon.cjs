@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 
 async function checkDynamicFavicon(page, root, documentUrl) {
   const saved = await page.evaluate(() => ({
@@ -17,7 +18,7 @@ async function checkDynamicFavicon(page, root, documentUrl) {
         return getComputedStyle(probe).color;
       }).join('|');
       probe.remove();
-      return icon && icon.dataset.palette === palette && icon.href.startsWith('data:image/png;base64,');
+      return icon && icon.dataset.palette === palette && /^https?:/.test(icon.href);
     });
     return page.evaluate(async () => {
       const icon = document.querySelector('[data-dynamic-favicon]');
@@ -37,6 +38,9 @@ async function checkDynamicFavicon(page, root, documentUrl) {
   const initial = await snapshot();
   assert.equal(initial.width, 64);
   assert.equal(initial.count, 1);
+  const script = await page.locator('[data-favicon-script]').getAttribute('src');
+  const scriptBody = await (await page.request.get(new URL(script, page.url()).href)).body();
+  assert.equal(new URL(script, page.url()).searchParams.get('v'), createHash('sha256').update(scriptBody).digest('hex').slice(0, 12));
   const skins = await page.locator('[data-skin-set]').evaluateAll(nodes => nodes.map(n => n.dataset.skinSet));
   assert.ok(skins.includes('violet') && skins.includes('aqua'));
   let previous = initial;
@@ -47,8 +51,17 @@ async function checkDynamicFavicon(page, root, documentUrl) {
     if (result.palette !== previous.palette) {
       assert.notEqual(result.href, previous.href, 'PNG changes with theme');
       assert.notDeepEqual(result.pixel, previous.pixel, 'Rendered background changes');
+      assert.notEqual(result.apple, previous.apple, 'Apple Touch follows the theme too');
     }
-    assert.equal(result.apple, initial.apple, 'Apple icon stays static');
+    for (const href of [result.href, result.apple]) {
+      const response = await page.request.get(href);
+      assert.equal(response.status(), 200);
+      const body = await response.body();
+      assert.ok(href.includes(new URL(root).pathname + '/assets/images/generated-icons/'));
+      assert.ok(href.endsWith('-' + createHash('sha256').update(body).digest('hex').slice(0, 12) + '.png'), 'PNG filename hashes its bytes');
+    }
+    assert.equal(await page.locator('link[rel="icon"]').count(), 1, 'No competing static favicon');
+    assert.equal(await page.locator('link[rel="apple-touch-icon"]').count(), 1, 'No competing static Apple icon');
     assert.equal(result.count, 1, 'No duplicate dynamic links');
     previous = result;
   }
@@ -88,13 +101,11 @@ async function checkDynamicFavicon(page, root, documentUrl) {
   const failedContext = await page.context().browser().newContext();
   const failed = await failedContext.newPage();
   try {
-    await failed.route('**/assets/images/*.svg*', route => {
-      if (route.request().resourceType() === 'fetch') return route.abort();
-      return route.continue();
-    });
+    await failed.route('**/assets/images/generated-icons/theme-*.png', route => route.abort());
     await failed.goto(root + '/', { waitUntil: 'networkidle' });
     assert.equal(await failed.locator('[data-dynamic-favicon]').count(), 0);
-    assert.equal(await failed.locator('link[rel="icon"][media="not all"]').count(), 0, 'Source failure keeps static icons active');
+    assert.equal(await failed.locator('link[rel="icon"]').count(), 3, 'PNG failure restores static icons');
+    assert.equal(await failed.locator('link[rel="apple-touch-icon"]').count(), 1, 'PNG failure restores Apple icon');
   } finally { await failedContext.close(); }
   const noJS = await page.context().browser().newContext({ javaScriptEnabled: false });
   try {
@@ -103,6 +114,6 @@ async function checkDynamicFavicon(page, root, documentUrl) {
     assert.equal(await fallback.locator('[data-dynamic-favicon]').count(), 0);
     assert.equal(await fallback.locator('link[rel="icon"]').count(), 3, 'No-JS static icons');
   } finally { await noJS.close(); }
-  console.log('Dynamic favicon: all skins, PNG pixels, reload/routes, modes/system theme, rapid changes and fallback passed.');
+  console.log('Theme favicon and Apple Touch: hashed HTTP PNGs, all skins, pixels, reload/routes, modes/system theme, rapid changes and fallback passed.');
 }
 module.exports = { checkDynamicFavicon };

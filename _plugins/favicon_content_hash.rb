@@ -19,6 +19,7 @@ module FaviconContentHash
       svg = cfg["favicon"].to_s.split("?", 2).first
       return if svg.to_s.empty?
 
+      site.data["favicon_script"] = fingerprint(site, "/assets/js/favicon-accent.js")
       cfg["favicon"] = fingerprint(site, svg)
       logo = cfg["logo"].to_s.split("?", 2).first
       cfg["logo"] = fingerprint(site, logo) unless logo.to_s.empty?

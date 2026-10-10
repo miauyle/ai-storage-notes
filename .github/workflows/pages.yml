@@ -40,6 +40,10 @@ jobs:
         env:
           JEKYLL_ENV: production
         run: bundle exec jekyll build --baseurl /ai-storage-notes
+      - name: Generate content-hashed theme icons
+        run: |
+          "$RUNNER_TEMP/site-deps/node_modules/.bin/playwright" install --with-deps chromium
+          NODE_PATH="$RUNNER_TEMP/site-deps/node_modules" node maintenance/build_theme_icons.cjs /ai-storage-notes
       - name: Check rendered links
         run: python scripts/check_site_links.py _site /ai-storage-notes
       - name: Browser verification
@@ -52,6 +56,10 @@ jobs:
         run: |
           "$RUNNER_TEMP/site-deps/node_modules/.bin/playwright" install --with-deps chromium
           NODE_PATH="$RUNNER_TEMP/site-deps/node_modules" node scripts/check_brand_ui.cjs
+      - name: Mobile WebKit icon verification
+        run: |
+          "$RUNNER_TEMP/site-deps/node_modules/.bin/playwright" install --with-deps webkit
+          NODE_PATH="$RUNNER_TEMP/site-deps/node_modules" node maintenance/check_webkit_icons.cjs /ai-storage-notes
       - name: Validate Edit this page links
         run: |
           ruby <<'RUBY'

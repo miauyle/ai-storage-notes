@@ -67,7 +67,7 @@ const root = 'http://127.0.0.1:8765' + baseurl;
     assert.equal(await brandLogo.count(), 1, 'navbar brand logo exists');
     assert.match(await brandLogo.getAttribute('src'), new RegExp(expectedLogo.replace('.', '\\.') + '\\?v=[0-9a-f]{12}$'));
 
-    const favicon = page.locator('link[rel="icon"][type="image/svg+xml"]');
+    const favicon = page.locator('link[data-static-brand-icon][type="image/svg+xml"]');
     assert.equal(await favicon.count(), 1, 'favicon link exists');
     assert.match(await favicon.getAttribute('href'), new RegExp(expectedFavicon.replace('.', '\\.') + '\\?v=[0-9a-f]{12}$'));
 
