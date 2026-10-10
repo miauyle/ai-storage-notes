@@ -22,12 +22,13 @@ async function boundedStyle(page, content, href) {
   const browser = await chromium.launch({ headless: true });
   let palettes, source;
   try {
-    const context = await browser.newContext({ javaScriptEnabled: false });
+    // Permit Playwright's injected style load callbacks, but never run site scripts.
+    const context = await browser.newContext();
     const page = await context.newPage();
     page.setDefaultTimeout(20000);
     await page.route('**/*', route => route.abort());
-    console.log('Theme icons: loading built homepage without JavaScript.');
-    await page.setContent(home);
+    console.log('Theme icons: loading built homepage with site scripts removed.');
+    await page.setContent(home.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ''));
     const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
     for (const href of styles) {
       if (!href.startsWith(base + '/assets/')) continue;
