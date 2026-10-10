@@ -4,6 +4,16 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { chromium } = require('playwright');
 
+async function boundedStyle(page, content, href) {
+  let timer;
+  try {
+    return await Promise.race([
+      page.addStyleTag({ content }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`CSS injection timed out: ${href}`)), 15000); })
+    ]);
+  } finally { clearTimeout(timer); }
+}
+
 (async () => {
   const site = path.resolve('_site');
   const base = process.argv[2];
@@ -14,13 +24,16 @@ const { chromium } = require('playwright');
   try {
     const context = await browser.newContext({ javaScriptEnabled: false });
     const page = await context.newPage();
+    page.setDefaultTimeout(20000);
     await page.route('**/*', route => route.abort());
+    console.log('Theme icons: loading built homepage without JavaScript.');
     await page.setContent(home);
     const styles = await page.locator('link[rel="stylesheet"]').evaluateAll(nodes => nodes.map(n => n.getAttribute('href')));
     for (const href of styles) {
       if (!href.startsWith(base + '/assets/')) continue;
       const file = path.join(site, href.slice(base.length).split('?')[0]);
-      await page.addStyleTag({ content: fs.readFileSync(file, 'utf8') });
+      console.log(`Theme icons: reading compiled CSS ${href}.`);
+      await boundedStyle(page, fs.readFileSync(file, 'utf8'), href);
     }
     source = await page.locator('link[rel="icon"][type="image/svg+xml"]').getAttribute('href');
     palettes = await page.evaluate(() => {
