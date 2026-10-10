@@ -25,3 +25,9 @@ skin/mode、系统深浅色、返回页面及重新显示时同步。没有 JS�
 
 浏览器标签列表、收藏/历史图标的刷新时机仍由浏览器决定。已安装到 iOS 主屏幕的图标不保证随页面主题自动更新。
 Chromium 和移动尺寸 WebKit 检查的是资源、声明、PNG 像素、缓存 hash、刷新/跨页、系统主题及回退；不能等同于 iPhone Safari/Chrome 的真实标签栏 UI 验证。
+
+## Safari 初始候选时序
+
+默认图标的元数据节点初始没有有效 rel；无 JS 时由 noscript 声明默认图标。脚本请求失败时 onerror 恢复默认声明。
+首次加载时，带 hash 的同步 head 脚本在解析阶段用 document.write 声明已保存主题对应的 PNG favicon / Apple Touch；严格限制为 parser-inserted、非 async/defer、document.readyState=loading，事件回调绝不调用 document.write。
+这是针对默认候选抢先被收集的兼容性修正，不等于保证 Safari 浏览器 UI 支持即时动态更新。不会强制刷新、改页面 URL 或清除用户缓存。Chrome 的后续 DOM 切换逻辑保持不变。

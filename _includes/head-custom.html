@@ -15,4 +15,4 @@
   }
 </style>
 
-<script src="{{ site.data.favicon_script | relative_url }}" data-favicon-script></script>
+<script src="{{ site.data.favicon_script | relative_url }}" data-favicon-script onerror="document.querySelectorAll('[data-static-brand-icon]').forEach(function(icon){icon.rel=icon.dataset.staticRel;})"></script>
