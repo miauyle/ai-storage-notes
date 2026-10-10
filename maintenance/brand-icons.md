@@ -1,19 +1,27 @@
 # 站点图标维护
 
-四站使用相同的生成器、head 模板与验证方法；图案由各站 `_config.yml` 的 `docsteer.favicon` 决定。
-SVG 是唯一图案源，每次 Jekyll 构建自动生成 32px、192px PNG favicon 与 180px Apple Touch 图标；不提交或手改生成文件。
-静态浏览器图标采用默认配色，导航 `docsteer.logo` 保持透明 SVG + 主题渐变背景。
-所有图标和 Logo URL 自动带各自内容的 SHA-256 hash，路径由 `relative_url` 加上项目 baseurl。
-换图时修改原 SVG 即可，不需要改文件名或手动改版本号。
+四站共用相同生成器、head 模板、主题切换和验证代码。各站图案由 `docsteer.favicon` 的 SVG 决定，导航 Logo 保持透明 SVG + CSS 主题渐变。
+静态 SVG、PNG 与 Logo URL 带内容 SHA-256；favicon 脚本同样自动带内容 hash，不使用手动版本号或每次请求的随机时间戳。
 
-首次本地构建先运行 `python3 -m pip install cairosvg==2.8.2`（需要系统 Cairo 库），再执行原有资源准备与 `bundle exec jekyll build`。
-CI 安装同一版本。`_includes/head.html` 以 DocSteer 1.1.1 为基准，仅替换 favicon 声明；升级主题时核对该覆盖模板。
-浏览器验证共享 `maintenance/check_brand_icons.cjs`，覆盖首页、完整目录与正文、资源可加载、尺寸及 hash。
-移动浏览器自身标签列表的图标选择不能通过页面 DOM 验证，最终需真机核验。
+## 发布构建
 
-## 动态标签页图标
+1. 安装现有站点依赖、`cairosvg==2.8.2` 和 Playwright Chromium。
+2. 执行原有 Jekyll production build。
+3. `NODE_PATH=<site-deps>/node_modules node maintenance/build_theme_icons.cjs /<project-baseurl>`。
+4. 执行原有站点与 Chromium 校验；安装 Playwright WebKit 后运行 `node maintenance/check_webkit_icons.cjs /<project-baseurl>`，最后上传完整 `_site`。
 
-四站共用 `assets/js/favicon-accent.js`。从配置的 SVG 中读取 `data-theme-color="brand"` / `accent` 渐变标记，将主题实际计算的 `--brand` / `--accent` 写入副本并生成 64px PNG。图案不变、不重复维护主题配色。
-页面加载、skin/mode 变化、系统深浅色变化及返回页面时同步；成功后启用唯一动态 `rel=icon`，静态 favicon 暂以 `media="not all"` 留作回退。无 JS、源图不可用或 Canvas 失败时仍使用原静态图标。Apple Touch 图标及静态 hash URL 不被运行时修改。
-浏览器可选择不立即刷新标签页图标；收藏夹、历史记录、iOS 主屏幕图标不保证随页面主题动态更新。移动端真机仍需人工确认浏览器 UI，Playwright 验证的是页面声明和生成图像。
-`maintenance/check_dynamic_favicon.cjs` 集成于现有 Chromium 校验，覆盖全部 skin、PNG 背景像素变化、刷新/跨页持久化、mode/系统主题、快速切换、失败与无 JS 回退。
+CI 已包含这些步骤。仅执行 Jekyll、不运行步骤 3 时保留默认静态图标，不生成主题变体。
+生成器从构建页面的实际 skin 控件及实际编译 CSS 读取每种 light/dark 的 `--brand` / `--accent`，不手写第二份配色表。
+`render_theme_icons.py` 修改原 SVG 副本中的 `data-theme-color="brand"` / `accent` 渐变标记，生成 64px favicon 和 180px Apple Touch PNG。
+文件名为 `theme-<size>-<PNG内容SHA256前12位>.png`，换颜色或图案即换 URL，同一内容继续复用缓存。
+生成文件和逐页注入的配色 manifest 仅存在于构建产物，不提交生成 PNG，不修改知识正文。
+
+## 页面行为与回退
+
+`favicon-accent.js` 是带内容 hash 的非 defer head 脚本：读取已恢复的主题与实际 CSS 颜色，选择 manifest 中的同源 HTTP PNG。
+同时替换唯一 `rel=icon` 和 `rel=apple-touch-icon` 节点；静态节点保留作回退但移除 rel，避免多个候选争抢。
+skin/mode、系统深浅色、返回页面及重新显示时同步。没有 JS、没有 manifest、未知配色或 PNG 解码失败时仍使用原静态图标。
+不再依赖 Canvas 或 `data:` URL 作为浏览器图标。
+
+浏览器标签列表、收藏/历史图标的刷新时机仍由浏览器决定。已安装到 iOS 主屏幕的图标不保证随页面主题自动更新。
+Chromium 和移动尺寸 WebKit 检查的是资源、声明、PNG 像素、缓存 hash、刷新/跨页、系统主题及回退；不能等同于 iPhone Safari/Chrome 的真实标签栏 UI 验证。

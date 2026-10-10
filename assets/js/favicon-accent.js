@@ -1,104 +1,68 @@
-/* Shared by all four knowledge sites. Static icons remain the fallback. */
+/* HTTP PNG variants are built from computed theme colors. */
 (() => {
-  const source = document.querySelector('link[rel="icon"][type="image/svg+xml"]');
-  if (!source) return;
+  const manifest = document.getElementById('favicon-palettes');
+  if (!manifest) return; // Plain Jekyll builds retain the static fallback.
+  const palettes = JSON.parse(manifest.textContent);
   const root = document.documentElement;
-  const staticIcons = [...document.querySelectorAll('link[rel="icon"]')];
-  const media = staticIcons.map(icon => icon.getAttribute('media'));
-  let template;
-  let current = '';
-  let serial = 0;
-  let frame = 0;
-  let dynamic;
-
+  const originals = [...document.querySelectorAll('[data-static-brand-icon]')];
+  const rels = originals.map(icon => icon.getAttribute('rel'));
+  let active = [], current = '', serial = 0, frame;
   function colors() {
     const probe = document.createElement('span');
     probe.hidden = true;
-    document.body.append(probe);
-    const result = ['brand', 'accent'].map(name => {
+    root.append(probe);
+    const key = ['brand', 'accent'].map(name => {
       probe.style.color = `var(--${name})`;
       return getComputedStyle(probe).color;
-    });
+    }).join('|');
     probe.remove();
-    return result;
+    return key;
   }
-
   function fallback() {
-    if (dynamic) dynamic.remove();
-    dynamic = undefined;
-    staticIcons.forEach((icon, index) => {
-      if (media[index] === null) icon.removeAttribute('media');
-      else icon.setAttribute('media', media[index]);
-    });
+    active.forEach(icon => icon.remove());
+    active = [];
+    originals.forEach((icon, i) => icon.setAttribute('rel', rels[i]));
     current = '';
   }
-
-  async function update() {
-    const palette = colors();
-    const key = palette.join('|');
+  function update() {
+    const key = colors();
     if (key === current) return;
     const version = ++serial;
-    try {
-      if (!template) {
-        const response = await fetch(source.href);
-        if (!response.ok) throw new Error('Favicon source unavailable');
-        const text = await response.text();
-        const svg = new DOMParser().parseFromString(text, 'image/svg+xml');
-        if (svg.querySelector('parsererror') || !svg.querySelector('[data-theme-color="brand"]') || !svg.querySelector('[data-theme-color="accent"]')) {
-          throw new Error('Favicon theme markers missing');
-        }
-        template = svg;
-      }
-      const svg = template.cloneNode(true);
-      svg.documentElement.setAttribute('width', '64');
-      svg.documentElement.setAttribute('height', '64');
-      ['brand', 'accent'].forEach((name, index) => {
-        svg.querySelectorAll(`[data-theme-color="${name}"]`).forEach(stop => stop.setAttribute('stop-color', palette[index]));
-      });
+    const variant = palettes[key];
+    if (!variant) { fallback(); return; }
+    const links = [['icon', '64x64', variant.icon], ['apple-touch-icon', '180x180', variant.apple]];
+    // Replace nodes and remove competing static icon declarations, including Apple Touch.
+    active.forEach(icon => icon.remove());
+    active = links.map(([rel, size, href]) => {
+      const icon = document.createElement('link');
+      icon.rel = rel;
+      icon.type = 'image/png';
+      icon.sizes = size;
+      icon.href = href;
+      icon.dataset.palette = key;
+      if (rel === 'icon') icon.dataset.dynamicFavicon = '';
+      else icon.dataset.dynamicAppleIcon = '';
+      document.head.append(icon);
+      return icon;
+    });
+    originals.forEach(icon => icon.removeAttribute('rel'));
+    current = key;
+    links.forEach(([, , href]) => {
       const image = new Image();
-      const loaded = new Promise((resolve, reject) => {
-        image.onload = resolve;
-        image.onerror = reject;
-      });
-      image.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
-      await loaded;
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = 64;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('Canvas unavailable');
-      context.drawImage(image, 0, 0, 64, 64);
-      const png = canvas.toDataURL('image/png');
-      if (version !== serial) return; // Never publish an obsolete color after rapid toggles.
-      if (!dynamic) {
-        dynamic = document.createElement('link');
-        dynamic.rel = 'icon';
-        dynamic.type = 'image/png';
-        dynamic.sizes = '64x64';
-        dynamic.dataset.dynamicFavicon = '';
-        document.head.append(dynamic);
-      }
-      dynamic.href = png;
-      dynamic.dataset.palette = key;
-      staticIcons.forEach(icon => icon.media = 'not all');
-      current = key;
-    } catch (_) {
-      if (version === serial) fallback();
-    }
+      image.onerror = () => { if (version === serial) fallback(); };
+      image.src = href;
+    });
   }
-
   function schedule() {
     cancelAnimationFrame(frame);
     frame = requestAnimationFrame(update);
   }
-  function start() {
-    schedule();
-    new MutationObserver(schedule).observe(root, {
-      attributes: true, attributeFilter: ['data-skin', 'data-mode', 'class', 'style']
-    });
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', schedule);
-    window.addEventListener('pageshow', schedule);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(); });
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-  else start();
+  // Non-deferred head script: use the persisted theme on initial navigation.
+  update();
+  new MutationObserver(schedule).observe(root, {
+    attributes: true, attributeFilter: ['data-skin', 'data-mode', 'class', 'style']
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', schedule);
+  window.addEventListener('pageshow', schedule);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(); });
 })();
