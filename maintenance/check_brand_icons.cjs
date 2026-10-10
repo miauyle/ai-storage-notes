@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { checkDynamicFavicon } = require('./check_dynamic_favicon.cjs');
 const { createHash } = require('node:crypto');
 
 async function checkBrandIcons(page, root) {
@@ -15,7 +16,7 @@ async function checkBrandIcons(page, root) {
   assert.ok(documentUrl, 'A real document must be available');
   for (const url of [root + '/', root + '/docs/', documentUrl]) {
     await page.goto(url, { waitUntil: 'networkidle' });
-    const icons = await page.locator('link[rel="icon"],link[rel="apple-touch-icon"]').evaluateAll(nodes => nodes.map(n => ({ rel: n.rel, type: n.type, sizes: n.sizes.value, href: n.href })));
+    const icons = await page.locator('link[rel="icon"]:not([data-dynamic-favicon]),link[rel="apple-touch-icon"]').evaluateAll(nodes => nodes.map(n => ({ rel: n.rel, type: n.type, sizes: n.sizes.value, href: n.href })));
     assert.deepEqual(icons.map(n => [n.rel, n.type, n.sizes]), [
       ['icon', 'image/svg+xml', 'any'], ['icon', 'image/png', '32x32'],
       ['icon', 'image/png', '192x192'], ['apple-touch-icon', 'image/png', '180x180']
@@ -43,6 +44,7 @@ async function checkBrandIcons(page, root) {
   }
   assert.deepEqual(iconsByRoute[0], iconsByRoute[1]);
   assert.deepEqual(iconsByRoute[0], iconsByRoute[2]);
+  await checkDynamicFavicon(page, root, documentUrl);
   await page.goto(original, { waitUntil: 'networkidle' });
 }
 module.exports = { checkBrandIcons };
