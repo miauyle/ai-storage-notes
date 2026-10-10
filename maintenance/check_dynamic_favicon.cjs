@@ -85,7 +85,8 @@ async function checkDynamicFavicon(page, root, documentUrl) {
   }, saved);
   await snapshot();
 
-  const failed = await page.context().newPage();
+  const failedContext = await page.context().browser().newContext();
+  const failed = await failedContext.newPage();
   try {
     await failed.route('**/assets/images/*.svg*', route => {
       if (route.request().resourceType() === 'fetch') return route.abort();
@@ -94,7 +95,7 @@ async function checkDynamicFavicon(page, root, documentUrl) {
     await failed.goto(root + '/', { waitUntil: 'networkidle' });
     assert.equal(await failed.locator('[data-dynamic-favicon]').count(), 0);
     assert.equal(await failed.locator('link[rel="icon"][media="not all"]').count(), 0, 'Source failure keeps static icons active');
-  } finally { await failed.close(); }
+  } finally { await failedContext.close(); }
   const noJS = await page.context().browser().newContext({ javaScriptEnabled: false });
   try {
     const fallback = await noJS.newPage();
