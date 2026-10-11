@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 
 async function checkDynamicFavicon(page, root, documentUrl) {
+  const browserOptions = { userAgent: await page.evaluate(() => navigator.userAgent) };
   const saved = await page.evaluate(() => ({
     skin: document.documentElement.getAttribute('data-skin'),
     mode: document.documentElement.getAttribute('data-mode'),
@@ -38,8 +39,7 @@ async function checkDynamicFavicon(page, root, documentUrl) {
   const initial = await snapshot();
   assert.equal(initial.width, 64);
   assert.equal(initial.count, 1);
-  // Initial icons must be parser-created, with no active default-color candidates.
-  assert.equal(await page.locator('[data-favicon-parser-icon]').count(), 2);
+  // Chrome has one active dynamic icon and no competing default candidates.
   assert.equal(await page.locator('[data-static-brand-icon][rel="icon"],[data-static-brand-icon][rel="apple-touch-icon"]').count(), 0);
   const script = await page.locator('[data-favicon-script]').getAttribute('src');
   const scriptBody = await (await page.request.get(new URL(script, page.url()).href)).body();
@@ -73,7 +73,6 @@ async function checkDynamicFavicon(page, root, documentUrl) {
   const violet = await snapshot();
   await page.reload({ waitUntil: 'networkidle' });
   assert.equal((await snapshot()).palette, violet.palette, 'Saved skin survives reload');
-  assert.equal(await page.locator('[data-favicon-parser-icon]').count(), 2, 'Saved theme icons are declared during parsing');
   for (const url of [root + '/docs/', documentUrl, root + '/']) {
     await page.goto(url, { waitUntil: 'networkidle' });
     assert.equal((await snapshot()).palette, violet.palette, 'Saved skin across routes');
@@ -102,7 +101,7 @@ async function checkDynamicFavicon(page, root, documentUrl) {
   }, saved);
   await snapshot();
 
-  const failedContext = await page.context().browser().newContext();
+  const failedContext = await page.context().browser().newContext(browserOptions);
   const failed = await failedContext.newPage();
   try {
     await failed.route('**/assets/images/generated-icons/theme-*.png', route => route.abort());
@@ -111,7 +110,7 @@ async function checkDynamicFavicon(page, root, documentUrl) {
     assert.equal(await failed.locator('link[rel="icon"]').count(), 3, 'PNG failure restores static icons');
     assert.equal(await failed.locator('link[rel="apple-touch-icon"]').count(), 1, 'PNG failure restores Apple icon');
   } finally { await failedContext.close(); }
-  const blockedContext = await page.context().browser().newContext();
+  const blockedContext = await page.context().browser().newContext(browserOptions);
   try {
     const blocked = await blockedContext.newPage();
     await blocked.route('**/assets/js/favicon-accent.js*', route => route.abort());
@@ -119,7 +118,7 @@ async function checkDynamicFavicon(page, root, documentUrl) {
     assert.equal(await blocked.locator('link[rel="icon"]').count(), 3, 'Script load error restores static icons');
     assert.equal(await blocked.locator('link[rel="apple-touch-icon"]').count(), 1);
   } finally { await blockedContext.close(); }
-  const noJS = await page.context().browser().newContext({ javaScriptEnabled: false });
+  const noJS = await page.context().browser().newContext({ ...browserOptions, javaScriptEnabled: false });
   try {
     const fallback = await noJS.newPage();
     await fallback.goto(root + '/', { waitUntil: 'networkidle' });

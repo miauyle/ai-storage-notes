@@ -1,0 +1,75 @@
+// Safari: select real HTML whose icon is static. Other browsers retain canonical URLs.
+(() => {
+  const node = document.getElementById('theme-page-config');
+  if (!node) return;
+  const config = JSON.parse(node.textContent);
+  const safari = /Safari\//.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|FxiOS|Edg|OPR|OPiOS|Android/.test(navigator.userAgent);
+  if (!safari) {
+    if (config.profile) location.replace(config.canonical + location.search + location.hash);
+    return;
+  }
+  const root = document.documentElement;
+  const media = matchMedia('(prefers-color-scheme: dark)');
+  const paths = new Set(config.paths);
+  const prefix = config.base + '/theme/';
+  function restore() {
+    try {
+      const skin = localStorage.getItem('docsteer-skin');
+      const mode = localStorage.getItem('docsteer-mode');
+      root.dataset.skin = config.skins.includes(skin) ? skin : (config.profile?.split('/')[0] || config.defaultSkin);
+      root.dataset.mode = ['light', 'dark', 'auto'].includes(mode) ? mode : 'auto';
+    } catch (_) {
+      root.dataset.skin = config.profile?.split('/')[0] || config.defaultSkin;
+      root.dataset.mode = config.profile?.split('/')[1] || 'auto';
+    }
+  }
+  function profile() {
+    const skin = config.skins.includes(root.dataset.skin) ? root.dataset.skin : config.defaultSkin;
+    const mode = root.dataset.mode;
+    return skin + '/' + (mode === 'dark' || (mode !== 'light' && media.matches) ? 'dark' : 'light');
+  }
+  function variant(canonical) { return prefix + profile() + canonical.slice(config.base.length); }
+  function canonical(pathname) {
+    if (!pathname.startsWith(prefix)) return pathname;
+    const match = pathname.slice(prefix.length).match(/^[a-z0-9-]+\/(light|dark)(\/.*)$/);
+    return match ? config.base + match[2] : pathname;
+  }
+  function navigate() {
+    const target = variant(config.canonical);
+    if (location.pathname !== target) {
+      location.replace(target + location.search + location.hash);
+      return true;
+    }
+    return false;
+  }
+  restore();
+  if (navigate()) return;
+  function rewrite(link) {
+    if (!link.hasAttribute('href') || link.hasAttribute('download')) return;
+    const url = new URL(link.href, location.href);
+    if (url.origin !== location.origin) return;
+    const original = canonical(url.pathname);
+    if (paths.has(original)) link.href = variant(original) + url.search + url.hash;
+  }
+  let frame;
+  function update() {
+    // Do not change location/history or the current document's static icon on skin changes.
+    document.querySelectorAll('a[href]').forEach(rewrite);
+  }
+  function schedule() { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); }
+  document.addEventListener('DOMContentLoaded', () => {
+    update();
+    new MutationObserver(schedule).observe(root, { attributes: true, attributeFilter: ['data-skin', 'data-mode'] });
+    new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true });
+    document.addEventListener('click', event => {
+      const link = event.target.closest('a[href]');
+      if (link) rewrite(link); // Also catches search results added immediately before clicking.
+    }, true);
+    media.addEventListener('change', schedule);
+    window.addEventListener('storage', () => { restore(); schedule(); });
+    window.addEventListener('pageshow', event => {
+      if (event.persisted) { restore(); if (navigate()) return; }
+      schedule();
+    });
+  });
+})();
