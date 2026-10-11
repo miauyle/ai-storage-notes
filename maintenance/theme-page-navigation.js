@@ -1,10 +1,11 @@
-// Safari: select real HTML whose icon is static. Other browsers retain canonical URLs.
+// Safari and iOS Chrome select static-icon HTML. Other browsers retain canonical URLs.
 (() => {
   const node = document.getElementById('theme-page-config');
   if (!node) return;
   const config = JSON.parse(node.textContent);
-  const safari = /Safari\//.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|FxiOS|Edg|OPR|OPiOS|Android/.test(navigator.userAgent);
-  if (!safari) {
+  const ua = navigator.userAgent;
+  const staticTheme = /CriOS\//.test(ua) || (/Safari\//.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|Edg|OPR|OPiOS|Android/.test(ua));
+  if (!staticTheme) {
     if (config.profile) location.replace(config.canonical + location.search + location.hash);
     return;
   }
