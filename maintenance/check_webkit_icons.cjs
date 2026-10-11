@@ -1,4 +1,4 @@
-// Engine/HTTP regression only; Safari tab UI is confirmed separately.
+// Engine/HTTP regression only; real Safari/Chrome tab UI is confirmed separately.
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
@@ -26,14 +26,15 @@ const { checkThemePages } = require('./check_theme_pages.cjs');
     browser = await webkit.launch({ headless: true });
     const root = `http://127.0.0.1:${server.address().port}${base}`;
     await checkThemePages(browser, root);
-    // iPhone Chrome stays on the existing dynamic path even when backed by WebKit.
-    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: 'Mozilla/5.0 AppleWebKit/605.1.15 CriOS/130.0 Mobile Safari/604.1', isMobile: true, deviceScaleFactor: 3, hasTouch: true });
+    // Android Chrome's existing dynamic branch remains unchanged. This is a UA/DOM
+    // regression in WebKit, not a test of Android Chrome's actual tab interface.
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36', isMobile: true, deviceScaleFactor: 3, hasTouch: true });
     try {
       const page = await context.newPage();
       await page.goto(root + '/', { waitUntil: 'networkidle' });
       await checkBrandIcons(page, root);
     } finally { await context.close(); }
-    console.log('WebKit static Safari routing and iPhone Chrome dynamic icon regression passed.');
+    console.log('WebKit static Safari/iOS Chrome routing and unchanged Android-UA dynamic DOM/resource regression passed.');
   } finally {
     if (browser) await browser.close();
     await new Promise(resolve => server.close(resolve));

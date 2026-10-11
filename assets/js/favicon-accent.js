@@ -1,7 +1,8 @@
 /* HTTP PNG variants are built from computed theme colors. */
 (() => {
-  // Safari uses real static HTML navigation, not scripted favicon replacement.
-  if (/Safari\//.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|FxiOS|Edg|OPR|OPiOS|Android/.test(navigator.userAgent)) return;
+  // Safari and iOS Chrome use static HTML icons; desktop/Android Chrome keep this path.
+  const ua = navigator.userAgent;
+  if (/CriOS\//.test(ua) || (/Safari\//.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|Edg|OPR|OPiOS|Android/.test(ua))) return;
   const manifest = document.getElementById('favicon-palettes');
   const root = document.documentElement;
   const originals = [...document.querySelectorAll('[data-static-brand-icon]')];

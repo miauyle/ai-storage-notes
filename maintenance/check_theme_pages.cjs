@@ -2,9 +2,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const safariAgents = [
+const staticAgents = [
   'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15'
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.6723.90 Mobile/15E148 Safari/604.1'
 ];
 
 async function checkThemePages(browser, root) {
@@ -29,8 +30,8 @@ async function checkThemePages(browser, root) {
   assert.ok(!fs.readFileSync(path.join(site, 'sitemap.xml'), 'utf8').includes(base + '/theme/'));
   assert.ok(!fs.readFileSync(path.join(site, 'search.json'), 'utf8').includes(base + '/theme/'));
   const skins = [...new Set(Object.keys(manifest.profiles).map(value => value.split('/')[0]))];
-  for (const [i, userAgent] of safariAgents.entries()) {
-    const context = await browser.newContext({ userAgent, viewport: i === 0 ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
+  for (const [i, userAgent] of staticAgents.entries()) {
+    const context = await browser.newContext({ userAgent, viewport: i === 1 ? { width: 1280, height: 900 } : { width: 390, height: 844 } });
     try {
       await context.addInitScript(() => {
         if (!localStorage.getItem('docsteer-skin')) {
@@ -80,7 +81,7 @@ async function checkThemePages(browser, root) {
       assert.ok(script.endsWith(`-${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}.js`));
     } finally { await context.close(); }
   }
-  const noJS = await browser.newContext({ javaScriptEnabled: false, userAgent: safariAgents[0] });
+  const noJS = await browser.newContext({ javaScriptEnabled: false, userAgent: staticAgents[0] });
   try {
     const page = await noJS.newPage();
     for (const profile of Object.keys(manifest.profiles)) {
@@ -93,13 +94,19 @@ async function checkThemePages(browser, root) {
       await page.waitForURL(root + '/theme/' + profile + '/docs/');
     }
   } finally { await noJS.close(); }
-  const chrome = await browser.newContext({ userAgent: 'Mozilla/5.0 AppleWebKit/605.1.15 CriOS/130.0 Mobile Safari/604.1' });
-  try {
-    const page = await chrome.newPage();
-    await page.goto(root + '/theme/ember/light/', { waitUntil: 'networkidle' });
-    await page.waitForURL(root + '/');
-    assert.equal(await page.locator('[data-dynamic-favicon]').count(), 1);
-  } finally { await chrome.close(); }
-  console.log(`Safari static routing: ${manifest.paths.length} pages × ${Object.keys(manifest.profiles).length} profiles, all skins, reload/navigation/modes, no-JS, search links, hashes and Chrome canonical URLs passed.`);
+  for (const userAgent of [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36'
+  ]) {
+    const chrome = await browser.newContext({ userAgent });
+    try {
+      const page = await chrome.newPage();
+      await page.goto(root + '/theme/ember/light/', { waitUntil: 'networkidle' });
+      await page.waitForURL(root + '/');
+      assert.equal(await page.locator('[data-dynamic-favicon]').count(), 1);
+      assert.equal(await page.locator('[data-theme-page-icon]').count(), 0);
+    } finally { await chrome.close(); }
+  }
+  console.log(`Safari/iOS Chrome static routing: ${manifest.paths.length} pages × ${Object.keys(manifest.profiles).length} profiles, all skins, reload/navigation/modes, no-JS, search links, hashes and desktop/Android Chrome canonical URLs passed. Browser tab UI is not tested.`);
 }
 module.exports = { checkThemePages };
