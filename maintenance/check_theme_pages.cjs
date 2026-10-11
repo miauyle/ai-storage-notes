@@ -60,9 +60,9 @@ async function checkThemePages(browser, root) {
         assert.equal(png.status(), 200);
         assert.ok(expected.endsWith(`-${createHash('sha256').update(await png.body()).digest('hex').slice(0, 12)}.png`));
       }
-      await page.locator(`a[href="${base}/theme/aqua/light/docs/"]:visible`).first().click();
+      await page.locator(`.knowledge-actions a[href="${base}/theme/aqua/light/docs/"]`).click();
       await page.waitForURL(root + '/theme/aqua/light/docs/');
-      await page.locator(`a[href="${base}/theme/aqua/light${doc.slice(base.length)}"]:visible`).first().click();
+      await page.locator(`#doc-content a[href="${base}/theme/aqua/light${doc.slice(base.length)}"]`).first().click();
       await page.waitForURL(root + '/theme/aqua/light' + doc.slice(base.length));
       await page.evaluate(doc => {
         const a = document.createElement('a'); a.href = doc; a.id = 'qa-search-result'; a.textContent = 'QA result'; document.body.append(a);
@@ -89,7 +89,7 @@ async function checkThemePages(browser, root) {
       assert.equal(await page.locator('link[rel="apple-touch-icon"]').count(), 1);
       assert.equal(await page.locator('html').getAttribute('data-skin'), profile.split('/')[0]);
       assert.equal(await page.locator('html').getAttribute('data-mode'), profile.split('/')[1]);
-      await page.locator(`a[href="${base}/theme/${profile}/docs/"]:visible`).first().click();
+      await page.locator(`.knowledge-actions a[href="${base}/theme/${profile}/docs/"]`).click();
       await page.waitForURL(root + '/theme/' + profile + '/docs/');
     }
   } finally { await noJS.close(); }
