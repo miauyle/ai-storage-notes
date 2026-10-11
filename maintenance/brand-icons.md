@@ -1,33 +1,37 @@
 # 站点图标维护
 
-四站共用相同生成器、head 模板、主题切换和验证代码。各站图案由 `docsteer.favicon` 的 SVG 决定，导航 Logo 保持透明 SVG + CSS 主题渐变。
-静态 SVG、PNG 与 Logo URL 带内容 SHA-256；favicon 脚本同样自动带内容 hash，不使用手动版本号或每次请求的随机时间戳。
+四站复用相同脚本、构建器与验证逻辑，图案来自各站 docsteer.favicon 的 SVG。
+Logo 保持透明 SVG + CSS 渐变。静态资源、动态图标脚本、页面导航脚本均使用内容 hash。
 
-## 发布构建
+## 构建
 
-1. 安装现有站点依赖、`cairosvg==2.8.2` 和 Playwright Chromium。
-2. 执行原有 Jekyll production build。
-3. `NODE_PATH=<site-deps>/node_modules node maintenance/build_theme_icons.cjs /<project-baseurl>`。
-4. 执行原有站点与 Chromium 校验；安装 Playwright WebKit 后运行 `node maintenance/check_webkit_icons.cjs /<project-baseurl>`，最后上传完整 `_site`。
+执行 Jekyll 后，运行 maintenance/build_theme_icons.cjs /<baseurl>。
+构建器从主题实际控件与编译 CSS 读取全部 skin / light / dark 的 --brand / --accent。
+render_theme_icons.py 从同一 SVG 生成 64px favicon 与 180px Apple Touch PNG，文件名由图片 SHA-256 决定。
+build_theme_pages.cjs 为首页、目录及全部正文生成 /theme/<skin>/<light|dark>/... HTML；正文源不复制。
+Chrome 继续使用原地址和 favicon-accent.js 的即时 PNG 切换。
 
-CI 已包含这些步骤。仅执行 Jekyll、不运行步骤 3 时保留默认静态图标，不生成主题变体。
-生成器从构建页面的实际 skin 控件及实际编译 CSS 读取每种 light/dark 的 `--brand` / `--accent`，不手写第二份配色表。
-`render_theme_icons.py` 修改原 SVG 副本中的 `data-theme-color="brand"` / `accent` 渐变标记，生成 64px favicon 和 180px Apple Touch PNG。
-文件名为 `theme-<size>-<PNG内容SHA256前12位>.png`，换颜色或图案即换 URL，同一内容继续复用缓存。
-生成文件和逐页注入的配色 manifest 仅存在于构建产物，不提交生成 PNG，不修改知识正文。
+## Safari 页面加载行为
 
-## 页面行为与回退
+普通地址读取已保存的 docsteer-skin / docsteer-mode，真正跳转到对应配色 HTML。
+该 HTML 直接声明唯一 PNG favicon 和 Apple Touch 图标，明确设置 skin / mode，不运行动态图标脚本。
+切色时只保存设置、更新本站文档链接，不改当前 URL、不强制刷新、不修改当前静态图标。
+手动刷新旧配色页面时，按保存的主题跳转一次；跨页链接直接进入新配色页面。
+搜索新建链接、页内锚点、Sidebar、Previous / Next、Logo 和完整目录保持对应路由。
+无 JS 时原地址保留默认静态图标；配色地址保留固定图标、模式与静态导航。
+非 Safari 浏览器打开配色分享地址时回到普通地址。下载、跨站链接和资源路径不重写。
 
-`favicon-accent.js` 是带内容 hash 的非 defer head 脚本：读取已恢复的主题与实际 CSS 颜色，选择 manifest 中的同源 HTTP PNG。
-同时替换唯一 `rel=icon` 和 `rel=apple-touch-icon` 节点；静态节点保留作回退但移除 rel，避免多个候选争抢。
-skin/mode、系统深浅色、返回页面及重新显示时同步。没有 JS、没有 manifest、未知配色或 PNG 解码失败时仍使用原静态图标。
-不再依赖 Canvas 或 `data:` URL 作为浏览器图标。
+## 索引与维护边界
 
-浏览器标签列表、收藏/历史图标的刷新时机仍由浏览器决定。已安装到 iOS 主屏幕的图标不保证随页面主题自动更新。
-Chromium 和移动尺寸 WebKit 检查的是资源、声明、PNG 像素、缓存 hash、刷新/跨页、系统主题及回退；不能等同于 iPhone Safari/Chrome 的真实标签栏 UI 验证。
+配色副本保留原 canonical / og:url 并声明 noindex,nofollow，不进入搜索或 sitemap。
+资源只生成一份，新增产物仅为 HTML 和轻量路由元数据。普通入口、Edit this page 和知识导航源不变。
+移除旧的 Safari document.write、无效 rel / noscript 竞争候选补丁，以及 A/B 与两篇文档试验生成器。
+PNG/hash 基础设施继续服务 Chrome 与静态页面，不属于被移除的 Safari 动态补丁。
+不保证收藏、历史或已有主屏幕快捷方式实时更新，不清理用户浏览器缓存。
 
-## Safari 初始候选时序
+## 验证
 
-默认图标的元数据节点初始没有有效 rel；无 JS 时由 noscript 声明默认图标。脚本请求失败时 onerror 恢复默认声明。
-首次加载时，带 hash 的同步 head 脚本在解析阶段用 document.write 声明已保存主题对应的 PNG favicon / Apple Touch；严格限制为 parser-inserted、非 async/defer、document.readyState=loading，事件回调绝不调用 document.write。
-这是针对默认候选抢先被收集的兼容性修正，不等于保证 Safari 浏览器 UI 支持即时动态更新。不会强制刷新、改页面 URL 或清除用户缓存。Chrome 的后续 DOM 切换逻辑保持不变。
+Chromium 保留全部动态配色、PNG 像素、hash、刷新、跨页、明暗模式与失败回退回归。
+WebKit 使用手机/桌面 Safari UA 验证全部配色页面、刷新、真实跨页、主题保存、动态搜索链接和无 JS。
+同时验证 iPhone Chrome 不走 Safari 路由、保留即时变色。
+自动检查的是页面、资源和导航；真实 Safari 标签栏的静态方案已由用户在试点确认，四站上线后仍应抽查。
