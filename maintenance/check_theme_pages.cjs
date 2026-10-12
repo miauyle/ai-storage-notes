@@ -24,6 +24,7 @@ async function checkThemePages(browser, root) {
     assert.ok(html.includes(`href="${manifest.icons[palette].icon}" data-theme-page-icon`));
     assert.ok(html.includes('noindex,nofollow'));
     assert.ok(!html.includes('data-favicon-script') && !html.includes('document.write'));
+    assert.ok(html.indexOf('theme-page-navigation-') < html.indexOf('data-theme-page-icon'), 'Route guard precedes static icons');
     const canonicalTag = html.match(/<link\b[^>]*rel="canonical"[^>]*href="([^"]+)"/);
     assert.equal(new URL(canonicalTag[1]).pathname, canonical);
   }

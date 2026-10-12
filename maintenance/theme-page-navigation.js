@@ -38,6 +38,9 @@
   function navigate() {
     const target = variant(config.canonical);
     if (location.pathname !== target) {
+      // The guard runs before icon links. Do not finish parsing a stale profile's
+      // head while replacement navigation is pending (including manual reload).
+      window.stop();
       location.replace(target + location.search + location.hash);
       return true;
     }
@@ -67,7 +70,15 @@
       if (link) rewrite(link); // Also catches search results added immediately before clicking.
     }, true);
     media.addEventListener('change', schedule);
-    window.addEventListener('storage', () => { restore(); schedule(); });
+    function resync() { restore(); schedule(); }
+    window.addEventListener('storage', event => {
+      if (event.key !== null && !['docsteer-skin', 'docsteer-mode'].includes(event.key)) return;
+      resync();
+    });
+    // iOS may suspend a background tab. Recover shared preferences even if its
+    // storage event was delayed/missed; do not reload on focus or passive changes.
+    window.addEventListener('focus', resync);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) resync(); });
     window.addEventListener('pageshow', event => {
       if (event.persisted) { restore(); if (navigate()) return; }
       schedule();

@@ -31,7 +31,11 @@ function buildThemePages(site, base, icons, profiles, defaultSkin) {
   fs.writeFileSync(path.join(site, 'assets/js', scriptName), script);
   function inject(html, page, profile) {
     const config = { base, canonical: page.route, profile, paths, skins, defaultSkin };
-    return html.replace('</head>', `<script id="theme-page-config" type="application/json">${json(config)}</script>\n<script src="${base}/assets/js/${scriptName}"></script>\n</head>`);
+    const routing = `<script id="theme-page-config" type="application/json">${json(config)}</script>\n<script src="${base}/assets/js/${scriptName}"></script>`;
+    // Select the document before declaring any old-profile icon. Keep charset first.
+    const charset = /<meta\b[^>]*charset\s*=[^>]*>/i;
+    if (charset.test(html)) return html.replace(charset, tag => tag + '\n' + routing);
+    return html.replace(/<head\b[^>]*>/i, tag => tag + '\n' + routing);
   }
   let count = 0;
   for (const page of pages) {
