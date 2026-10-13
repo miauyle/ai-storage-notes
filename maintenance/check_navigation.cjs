@@ -46,19 +46,31 @@ async function checkNavigation(page, root) {
       return {
         brand: doc.querySelector('.navbar .brand')?.getAttribute('href'),
         docs: [...doc.querySelectorAll('.navbar__links a')].filter(n => n.textContent.trim() === '文档').map(n => n.getAttribute('href')),
+        sidebar: [...doc.querySelectorAll('#sidebar .sidebar__nav a[href]')].map(n => n.getAttribute('href')),
+        drawerOnly: doc.querySelector('#sidebar')?.classList.contains('sidebar--drawer-only'),
         pager: [...doc.querySelectorAll('.doc-pager a')].map(n => n.getAttribute('href'))
       };
     }, html);
     assert.equal(links.brand, base + '/');
     assert.deepEqual(links.docs, [base + '/docs/']);
-    // Pages outside the docs collection (e.g. SOURCES.html) have no pager.
-    if (href.startsWith(base + '/docs/')) {
-      assert.deepEqual(links.pager, [entries[index - 1], entries[index + 1]].filter(Boolean), 'Reading order: ' + href);
-    }
+    assert.deepEqual(links.sidebar, entries, 'Documentation sidebar persists: ' + href);
+    assert.equal(links.drawerOnly, false, 'Desktop sidebar is not drawer-only: ' + href);
+    assert.deepEqual(links.pager, [entries[index - 1], entries[index + 1]].filter(Boolean), 'Reading order: ' + href);
   }
 
   const first = new URL(entries[0], root).href;
   await page.locator(`#doc-content a[href="${entries[0]}"]`).first().click();
+  await arrive(first);
+  const sources = page.locator(`#sidebar .sidebar__nav a[href="${base}/SOURCES.html"]`);
+  if (mobile) await page.locator('#sidebarToggle').click();
+  if (!await sources.isVisible()) await sources.locator('xpath=ancestor::*[contains(@class, "sidebar__group")]').locator('.sidebar__group-title').click();
+  await sources.click();
+  await arrive(root + '/SOURCES.html');
+  if (mobile) await page.locator('#sidebarToggle').click();
+  assert.ok(await page.locator('#sidebar .sidebar__nav').isVisible(), 'Sources page keeps usable sidebar navigation');
+  const returnLink = page.locator(`#sidebar .sidebar__nav a[href="${entries[0]}"]`);
+  if (!await returnLink.isVisible()) await returnLink.locator('xpath=ancestor::*[contains(@class, "sidebar__group")]').locator('.sidebar__group-title').click();
+  await returnLink.click();
   await arrive(first);
   await primary(base + '/docs/');
   await arrive(catalog);
