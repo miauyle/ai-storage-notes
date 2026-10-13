@@ -16,6 +16,18 @@ description: 记录高变化技术陈述的官方来源、核实边界与复查�
 4. 当 `latest` 页面内容改变时，优先更新陈述和核实日期；需要复现实验时另存 release/tag/commit，而不是依赖浮动链接。
 5. 每次事实复核只更新真正检查过的条目，不把局部复核写成全项目已刷新。
 
+## LLM 前置依据（2026-10-13，北京时间）
+
+| 原始/官方来源 | 本次核对范围 | 边界 |
+|---|---|---|
+| [Attention Is All You Need](https://arxiv.org/abs/1706.03762) | Attention 的投影、scaled dot-product 与多头机制 | 原文是 encoder-decoder；前置采用 decoder-only 基线，教学矩阵自行构造 |
+| [GQA 原始论文](https://arxiv.org/abs/2305.13245) | 多个 query heads 共享较少 KV heads | 不把结构转换讲成无训练的配置开关 |
+| [Transformers How caching works](https://huggingface.co/docs/transformers/main/cache_explanation) | 自回归缓存依赖与逐层历史 K/V 复用 | main 在线机制说明，不新增框架 API/版本兼容声明 |
+| [PyTorch Tensor attributes](https://docs.pytorch.org/docs/stable/tensor_attributes.html) | Shape/dtype 与 FP16/BF16/FP8 位数 | 不声称任意硬件支持任意 dtype；量化 metadata 另算 |
+| [NVIDIA GPU Performance](https://docs.nvidia.com/deeplearning/performance/dl-performance-gpu-background/index.html)、[Matrix Multiplication](https://docs.nvidia.com/deeplearning/performance/dl-performance-matrix-multiplication/index.html) | 计算、内存、延迟限制，2mkn 与算术强度模型 | 仅机制；教学 100 TFLOP/s、1 TB/s 等不是硬件规格或 benchmark |
+
+四篇前置的模型几何、显存预算、延迟与带宽都是明确假设下的教学推演。仅本表为本轮核对，不刷新下方旧技术条目的核实日期。无 GPU/RDMA 实测或 Demo 实现变更。
+
 ## 高变化来源
 
 | 主题 | 官方来源 | 项目使用的边界 | 项目核实口径 | 何时必须重查 |

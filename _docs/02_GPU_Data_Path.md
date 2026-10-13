@@ -12,6 +12,8 @@ description: 理解 Storage 到 GPU 的数据路径、ownership、DMA 与完成�
 > 2026-09-25：新增冷 KV Range GET 贯穿案例及通用对象服务端前台读路径；Java→C++ 的 buffer 前置也做了补充。未对所有外部资料重新核实。
 > 2026-10-03：NIXL 升为 SHOULD KNOW；cuObject 按本次官方 overview/API/release notes 复核，其他旧来源未全量刷新。
 
+若 GPU、kernel、HBM 或矩阵计算还陌生，先读[GPU 推理与存储需求]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/#gpu-hbm)；本篇继续解释具体搬运机制和生命周期。
+
 ## 第一遍阅读导航
 
 | 先读 | 达标输出 | 本轮可后查 |

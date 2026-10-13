@@ -14,10 +14,19 @@ description: 按 90/60 小时预算学习、动手和复测，把已有对象存
 
 ## 1. 今天从哪里开始
 
-1. 先花 45 分钟做[Day 0 诊断]({{ site.baseurl }}/docs/00_Interview_Drills/#day0-diagnosis)，保存原答案，再核对正文。
-2. KV 机制/容量有 0 分题，先读[第一篇]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/)；ownership/完成条件有 0 分题，先读[第二篇]({{ site.baseurl }}/docs/02_GPU_Data_Path/)。
-3. 已能独立画路径、算容量，就进入[第三篇]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/)和闭卷追问，不继续从头顺读。
+1. 没有 AI 基础，先读下面四篇前置。理解模型和数组之后再做 Day 0，不把不认识名词当成面试能力诊断。
+2. 已能解释推理和 KV 公式，先花 45 分钟做[Day 0 诊断]({{ site.baseurl }}/docs/00_Interview_Drills/#day0-diagnosis)，保存原答案，再核对正文。
+3. KV 机制/容量有 0 分题，定向读[第一篇]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/)；ownership/完成条件有 0 分题，定向读[第二篇]({{ site.baseurl }}/docs/02_GPU_Data_Path/)。已过关则进入系统设计与追问。
 4. C++ 只读得懂但写不动，做[最小 C++ 实验]({{ site.baseurl }}/docs/04_CPP_Labs/)；先在 CPU 上解决资源拥有关系，再接 S3。
+
+| 前置顺序 | 直接阅读的教程 | 读完应能独立解释 |
+|---|---|---|
+| 1 | [模型与 Transformer]({{ site.baseurl }}/docs/00a_LLM_Model_Transformer/) | 权重与输入的区别，Token→Embedding→Layer→Q/K/V |
+| 2 | [推理与 KV 生命周期]({{ site.baseurl }}/docs/00b_LLM_Inference/) | Prefill/Decode 的每轮输入、输出和缓存变化 |
+| 3 | [Tensor 与显存计算]({{ site.baseurl }}/docs/00c_Tensor_Memory/) | 两个“2”的来源、128 KiB/token、1 GiB Prefix 与增长预算 |
+| 4 | [GPU 推理与存储需求]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/) | HBM/PCIe/网络的区别，何时恢复胜过重算 |
+
+这四篇是零基础教程，不是额外书单。前置完成后直接衔接已有三篇主教程；已掌握者可跳过。用[前置毕业题]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/#foundation-gate)确认能连续解释，而不是逐个背定义。
 
 每次学习只留一个可检查的输出：一张路径图、一组算例、一次两分钟口述，或一个自己改过且测试通过的程序。不要把复制正文当成输出。
 
@@ -40,7 +49,7 @@ description: 按 90/60 小时预算学习、动手和复测，把已有对象存
 
 ## 3. 90 小时与 60 小时：动手不是额外加班
 
-以下都是规划预算，不是保证学会的工时。每天约 3 小时，按实际卡点调整；C++ 新手遇到工具链问题时缩范围，不挤掉投递。
+以下都是规划预算，不是保证学会的工时。每天约 3 小时，按实际卡点调整；前置教程占用原定向阅读预算（先预留约 6～9 小时，按自检调整），替换第一篇基础部分的重复阅读，不额外叠加。零基础读者若需要更多时间，顺延后面的阅读/训练；C++ 新手遇到工具链问题时缩范围，不挤掉投递。
 
 | 用途 | 90 小时版 | 60 小时版 |
 |---|---:|---:|
@@ -63,8 +72,8 @@ description: 按 90/60 小时预算学习、动手和复测，把已有对象存
 
 | 时间 | 主任务 | 当阶段交付/停止线 |
 |---|---|---|
-| Day 1～3 | 第一篇 §1～3 | token→attention→KV；讲清 Prefill/Decode 和服务指标 |
-| Day 4～5 | 第一篇 §4 | 换模型参数算容量；解释共享与输出增长 |
+| Day 1～3 | 零基础读前置一～四；已有基础读第一篇 §1～3 | 解释完整推理与 KV 公式；前置未过关则顺延，跳过已掌握的重复阅读 |
+| Day 4～5 | 前置自检后定向回读第一篇 §2～4 | 换模型参数算容量；解释共享与输出增长 |
 | Day 6～7 | 第一篇 §5～7；链 A/B | 恢复/重算的数字判断；完成 Day 7 Gate |
 | Day 8～10 | 第二篇 §1～2；C++ 实验 1/2 | ownership 转移与异步保活程序通过；能解释错误版本 |
 | Day 11～14 | 第二篇 §3～5；链 C/D | 三条 GPU 路径、一次 WRITE 的资源与完成顺序；Day 14 Gate |

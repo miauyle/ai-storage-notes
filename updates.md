@@ -7,6 +7,13 @@ permalink: /updates/
 
 这里记录已发布的**教程内容更新**，按北京时间排列。每条链接指向当前教程的对应位置；旧章节可能已被后来修订。站点样式、按钮和构建修复不计入内容更新。
 
+## 2026-10-13 · 补齐零 AI 基础的 LLM 前置教程
+
+- [模型与 Transformer]({{ site.baseurl }}/docs/00a_LLM_Model_Transformer/)：模型/权重、训练/推理、Token/Embedding、逐层 Attention 与 Q/K/V 数字算例。
+- [推理与 KV 生命周期]({{ site.baseurl }}/docs/00b_LLM_Inference/)：Prompt/Context、Prefill/Decode 时间轴、Batching、前缀复用与释放边界。
+- [Tensor 与显存计算]({{ site.baseurl }}/docs/00c_Tensor_Memory/)：FP16 的 2 bytes、K/V 两份数组、128 KiB/token→1 GiB、page/chunk 和增长预算的逐项推导。
+- [GPU 推理与存储需求]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/)：HBM、kernel、矩阵/带宽模型、restore/recompute 交点与端到端约束。Study Guide、首页地图、导航和主教程同步链接；不新增存储专题，不修改 Demo A/B/C，继续维护模式。
+
 ## 2026-10-03 · A/B/C 最小工程证据落地，仓库建设收口
 
 - **A：**Python standard-library restore/recompute 工具支持 prefix/bandwidth 扫描、显式 KV size、转换/可见性成本与 CSV；测试公式、单位、交点两侧和无有限正交点。只是 performance decision model，不是 GPU benchmark。

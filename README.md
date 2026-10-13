@@ -1,7 +1,7 @@
 # AI Storage 一个月面试冲刺教程
 
 > 面向 Dell EMC ECS/ObjectScale 工程师（3 年 10 个月）：Java 为复制/迁移/CRR 功能开发主力；Go 用于运行数据 telemetry 采集与统计，Python 曾用于工作。
-> 面试主线修订：2026-10-03 · 中文教程，保留英文术语与英文短答。
+> 面试主线修订：2026-10-13 · 中文教程，保留英文术语与英文短答。
 >
 > 目标：用约一个月准备 KV Cache × GPU Data Path × S3 over RDMA 交汇处的存储岗位，并在准备过程中开始针对性投递。
 
@@ -11,12 +11,16 @@
 
 | 顺序 | 主教程 | 读完应能做什么 |
 |---|---|---|
+| 前置 1 | [LLM 模型与 Transformer](_docs/00a_LLM_Model_Transformer.md) | 从零理解模型、权重、Token、Attention 与 KV 来源 |
+| 前置 2 | [LLM 推理与 KV 生命周期](_docs/00b_LLM_Inference.md) | 跟踪 Prefill/Decode、Batching 和缓存释放 |
+| 前置 3 | [Tensor 与显存计算](_docs/00c_Tensor_Memory.md) | 独立推导元素字节数、KV 容量、分页与增长预算 |
+| 前置 4 | [GPU 推理与存储需求](_docs/00d_GPU_Storage_Bridge.md) | 区分 HBM/PCIe/网络并计算恢复与重算交点 |
 | 1 | [AI Storage & KV Cache Interview Crash Course](_docs/01_AI_Storage_KV_Cache.md) | 区分活跃 Decode、P/D 交接和冷 Prefix 复用；从容量、热度与重算成本决定是否存 S3 |
 | 2 | [GPU Data Path: CUDA, RDMA, GPUDirect and S3](_docs/02_GPU_Data_Path.md) | 沿一次冷 KV Range GET 解释服务端读取、TCP/Host 或 RDMA/GPU 路径、buffer 寿命与完成条件 |
 | 3 | [AI Storage System Design & Interview Guide](_docs/03_System_Design_Interview_Demo.md) | 把 1 GiB 冷 Prefix 恢复到 GPU Ready 的设计、预算、故障和个人 ECS/ObjectScale 项目回答串起来 |
 | 配套 | [AI Storage 闭卷训练册](_docs/00_Interview_Drills.md) | Day 0 诊断、八条追问链、随机算题、英文口述与错题复测 |
 
-**这三份正文就是教程。** 官方链接用于核对事实与版本，不要求另读完整 CUDA/RDMA 文档才能理解。没有重写 ECS/ObjectScale 架构，也没有把任务扩成完整 AI Infra 课程。
+**零 AI 基础先读四篇前置，再接三篇主教程；这些正文就是教程。** 官方链接用于核对事实与版本，不要求另读完整 CUDA/RDMA 文档才能理解。没有重写 ECS/ObjectScale 架构，也没有把任务扩成完整 AI Infra 课程。
 
 文档采用 Markdown，便于搜索、改写、做笔记和交给 Codex CLI。图用 Mermaid，表格和公式可直接阅读；在支持 Mermaid 的预览中显示为架构/时序图。三份主教程合计含 **22 组 Interview Check、18 张 Mermaid 图、30 道必答题**。完整 KV/GPU Demo 仍是设计与接口契约；现已提供 CPU ownership、只读 HTTPS Range probe，以及 A/B/C 的计算模型、两槽 CPU pipeline 和确定性失败注入。五个 CTest 套件覆盖本地 correctness，不等于完整 M0/M1 或 GPU/RDMA 已实现。训练册与正文分开，第一次作答时不会直接看到标准答案。
 
@@ -24,7 +28,7 @@
 
 先看[从 ECS/ObjectScale 到 AI Storage 的前置地图](_docs/01_AI_Storage_KV_Cache.md#ecs-to-ai-storage)，明确 Java 主线、Go telemetry 与 GPU/RDMA 新知识的边界；不把复制、在线迁移或 CRR 直接当成 GPU 数据面经验。
 
-如果已经掌握部分内容，不要从头顺序重读：先做训练册的 Day 0 诊断，按 0 分题回到对应章节。若全部达到 2 分，直接练八条追问链和目标 JD，而不是继续扩大阅读范围。
+没有 AI 背景，先从四篇前置开始。若已经掌握部分内容，不要从头顺序重读：先做训练册的 Day 0 诊断，按 0 分题回到对应章节。若全部达到 2 分，直接练八条追问链和目标 JD，而不是继续扩大阅读范围。
 
 ## 深度规则
 
@@ -56,7 +60,7 @@
 | cuObject 的 S3/RDMA、client/server 与完成边界 | [第二篇 §7.3](_docs/02_GPU_Data_Path.md#chapter-7)，按本次官方 release notes 校准 |
 | 无 GPU/RDMA 实验室如何给工程证据、如何分段排障 | [A/B/C 实验规格](_docs/03_System_Design_Interview_Demo.md#kv-demo-experiments)、[Troubleshooting Matrix](_docs/03_System_Design_Interview_Demo.md#inference-troubleshooting)；设计、计算与已运行测试分开 |
 
-本轮不新增基础大教程。已有生产经历可迁移的是 distributed data movement、failure/retry/idempotency、metadata/state、S3 semantics、容量、backpressure 和证据驱动排障；CUDA/GPU/pinned memory、RDMA/GPUDirect、NIXL、KV layout、runtime 与 P/D 仍是需要新学的能力。C++ 仅用于转向岗位的数据路径练习，不改写过去 Java/Go/Python 经历。
+2026-10-13 补齐 LLM 前置，解决零 AI 基础的阅读跳跃；现有存储专题与 Demo 范围保持，仓库继续维护模式。已有生产经历可迁移的是 distributed data movement、failure/retry/idempotency、metadata/state、S3 semantics、容量、backpressure 和证据驱动排障；CUDA/GPU/pinned memory、RDMA/GPUDirect、NIXL、KV layout、runtime 与 P/D 仍是需要新学的能力。C++ 仅用于转向岗位的数据路径练习，不改写过去 Java/Go/Python 经历。
 
 ## 这次补深的内容，优先读哪里
 
