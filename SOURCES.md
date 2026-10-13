@@ -1,5 +1,5 @@
 ---
-layout: page
+layout: doc
 title: 技术来源与版本台账
 description: 记录高变化技术陈述的官方来源、核实边界与复查触发条件。
 ---
