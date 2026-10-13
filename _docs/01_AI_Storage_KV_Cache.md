@@ -13,6 +13,8 @@ description: 从 LLM workload 推导 KV Cache 的容量、访问模式、缓存�
 > 2026-09-25：新增 KV × S3 × GPU 贯穿案例，并按 ECS/ObjectScale 的 Java 功能开发、Go telemetry 与实际排障经验校准前置；时间预算仍为教学假设。
 > 2026-10-03：补 Modern KV Stack 与职责定位，不扩大训练专题。
 
+没有 AI 基础时，先读 [模型与 Transformer]({{ site.baseurl }}/docs/00a_LLM_Model_Transformer/) → [推理流程]({{ site.baseurl }}/docs/00b_LLM_Inference/) → [张量与显存]({{ site.baseurl }}/docs/00c_Tensor_Memory/) → [GPU 与存储衔接]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/)。本篇已有最小模型部分可作复习。
+
 ## 第一遍阅读导航
 
 | 先读 | 达标输出 | 本轮可后查 |
@@ -116,6 +118,8 @@ flowchart TD
 图中的循环表示不同模型层，**每层都有独立参数和独立 KV**，不是重复使用同一层的缓存。
 
 ### 1.2 Q / K / V 到底是什么
+
+需要看到投影、点积、softmax 的实际数字时，先看[前置一的完整算例]({{ site.baseurl }}/docs/00a_LLM_Model_Transformer/#qkv)。
 
 对某层某个 token 的当前表示，模型通过不同的线性变换得到：
 
@@ -282,6 +286,8 @@ flowchart TD
 
 ### 3.1 一次请求到底发生什么
 
+从零理解每轮输入、输出与 KV 变化，见[三 token 时间轴]({{ site.baseurl }}/docs/00b_LLM_Inference/#prefill-decode)。
+
 假设 prompt 有 8,192 tokens，计划输出 256 tokens：
 
 1. **Model loading**：进程启动时加载权重，分配运行时空间。暖服务的一次普通请求通常不重复这一步。
@@ -383,6 +389,8 @@ sequenceDiagram
 <a id="chapter-4"></a>
 
 ## 4. KV Cache 的容量、布局与生命周期 — MUST KNOW
+
+不熟悉 Tensor/FP16，或不知道公式两个“2”从何而来，先读[逐项容量推导]({{ site.baseurl }}/docs/00c_Tensor_Memory/#kv-formula)与[page/chunk 换算]({{ site.baseurl }}/docs/00c_Tensor_Memory/#pages-chunks)。
 
 ### 4.1 公式要从维度推出来
 

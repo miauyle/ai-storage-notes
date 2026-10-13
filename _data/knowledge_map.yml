@@ -5,6 +5,18 @@ groups:
       - title: 如何使用本教程
         url: /docs/00_Study_Guide/
         summary: 时间预算、30 天安排、JD 分流与停止线
+      - title: LLM 模型与 Transformer
+        url: /docs/00a_LLM_Model_Transformer/
+        summary: 无 AI 背景先读：权重、Token、Attention 与 KV 来源
+      - title: 推理与 KV 生命周期
+        url: /docs/00b_LLM_Inference/
+        summary: Prefill、Decode、Batching 与缓存释放
+      - title: Tensor 与显存计算
+        url: /docs/00c_Tensor_Memory/
+        summary: 从每元素字节数推导 128 KiB/token 与 1 GiB Prefix
+      - title: GPU 推理与存储需求
+        url: /docs/00d_GPU_Storage_Bridge/
+        summary: HBM、计算/带宽约束与恢复/重算交点
       - title: 闭卷诊断与追问
         url: /docs/00_Interview_Drills/
         summary: 先暴露薄弱点，再回到对应机制和系统设计

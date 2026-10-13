@@ -12,6 +12,8 @@ description: 分布式 KV Cache 系统设计、面试答案与 Demo 规格。
 > 2026-09-25：新增冷 Prefix 跨 S3/GPU 案例，校准 ECS/ObjectScale 个人项目卡，并把可选 Demo 统一为 C++ 基线与模拟；所有数值推演仍为教学输入。
 > 2026-10-03：补三类场景、Compatibility Contract、A/B/C 实验规格与排障矩阵；未宣称新硬件/集成实验通过。
 
+若还无法解释 1 GiB Prefix 的来源与恢复意义，先完成[KV 容量推导]({{ site.baseurl }}/docs/00c_Tensor_Memory/#kv-formula)与[恢复/重算交点]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/#restore-recompute)，再进入本篇设计。
+
 ## 第一遍阅读导航
 
 | 先读 | 达标输出 | 实现时再查 |

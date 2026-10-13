@@ -25,6 +25,15 @@ sidebar:
     children:
       - { title: "如何使用本教程", url: /docs/00_Study_Guide/ }
 
+  - title: LLM 前置基础
+    icon: fa-solid fa-layer-group
+    open: true
+    children:
+      - { title: "模型与 Transformer", url: /docs/00a_LLM_Model_Transformer/ }
+      - { title: "推理与 KV 生命周期", url: /docs/00b_LLM_Inference/ }
+      - { title: "Tensor 与显存计算", url: /docs/00c_Tensor_Memory/ }
+      - { title: "GPU 推理与存储需求", url: /docs/00d_GPU_Storage_Bridge/ }
+
   - title: 核心基础
     icon: fa-solid fa-layer-group
     open: true
