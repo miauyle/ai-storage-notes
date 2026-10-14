@@ -1,7 +1,7 @@
 # AI Storage 一个月面试冲刺教程
 
 > 面向 Dell EMC ECS/ObjectScale 工程师（3 年 10 个月）：Java 为复制/迁移/CRR 功能开发主力；Go 用于运行数据 telemetry 采集与统计，Python 曾用于工作。
-> 面试主线修订：2026-10-13 · 中文教程，保留英文术语与英文短答。
+> 面试主线修订：2026-10-14 · 中文教程，保留英文术语与英文短答。
 >
 > 目标：用约一个月准备 KV Cache × GPU Data Path × S3 over RDMA 交汇处的存储岗位，并在准备过程中开始针对性投递。
 
@@ -20,7 +20,7 @@
 | 3 | [AI Storage System Design & Interview Guide](_docs/03_System_Design_Interview_Demo.md) | 把 1 GiB 冷 Prefix 恢复到 GPU Ready 的设计、预算、故障和个人 ECS/ObjectScale 项目回答串起来 |
 | 配套 | [AI Storage 闭卷训练册](_docs/00_Interview_Drills.md) | Day 0 诊断、八条追问链、随机算题、英文口述与错题复测 |
 
-**零 AI 基础先读四篇前置，再接三篇主教程；这些正文就是教程。** 官方链接用于核对事实与版本，不要求另读完整 CUDA/RDMA 文档才能理解。没有重写 ECS/ObjectScale 架构，也没有把任务扩成完整 AI Infra 课程。
+**零 AI 基础先读四篇前置的基础主线，再接三篇主教程；这些正文就是教程。** 四篇用“对象存储很 → 快 → 。”贯穿模型、数组、注意力与生成，再放大到原有容量和搬运算例。进阶数学、架构变体和实现细节单列选读，首次可跳过。 官方链接用于核对事实与版本，不要求另读完整 CUDA/RDMA 文档才能理解。没有重写 ECS/ObjectScale 架构，也没有把任务扩成完整 AI Infra 课程。
 
 文档采用 Markdown，便于搜索、改写、做笔记和交给 Codex CLI。图用 Mermaid，表格和公式可直接阅读；在支持 Mermaid 的预览中显示为架构/时序图。三份主教程合计含 **22 组 Interview Check、18 张 Mermaid 图、30 道必答题**。完整 KV/GPU Demo 仍是设计与接口契约；现已提供 CPU ownership、只读 HTTPS Range probe，以及 A/B/C 的计算模型、两槽 CPU pipeline 和确定性失败注入。五个 CTest 套件覆盖本地 correctness，不等于完整 M0/M1 或 GPU/RDMA 已实现。训练册与正文分开，第一次作答时不会直接看到标准答案。
 
