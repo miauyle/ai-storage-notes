@@ -7,6 +7,12 @@ permalink: /updates/
 
 这里记录已发布的**教程内容更新**，按北京时间排列。每条链接指向当前教程的对应位置；旧章节可能已被后来修订。站点样式、按钮和构建修复不计入内容更新。
 
+## 2026-10-14 · 四篇 LLM 前置改为连续自学教程
+
+- [第一篇]({{ site.baseurl }}/docs/00a_LLM_Model_Transformer/)从普通程序、机器学习、参数和训练讲起，先解释数组再引入 Embedding 与 Q/K/V；同一补句请求贯穿编号、矩阵乘加、注意力与文字输出。
+- [第二篇]({{ site.baseurl }}/docs/00b_LLM_Inference/)先展示不缓存的重复工作，再解释 Prefill/Decode、历史 KV 的稳定性、增长与释放；[第三篇]({{ site.baseurl }}/docs/00c_Tensor_Memory/)从小数组字节数推到 128 KiB/token、1 GiB 与输出增长，量化 Scale 用近似保存/还原过程解释。
+- [第四篇]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/)从计算与内存压力接到 GPU、搬运与对象存储，用逐项预算比较恢复和重算。四篇区分基础必读与进阶选读，Study Guide 同步首次阅读范围。保留重要推导、页面地址、主题和 Demo A/B/C，继续维护模式。
+
 ## 2026-10-13 · 补齐零 AI 基础的 LLM 前置教程
 
 - [模型与 Transformer]({{ site.baseurl }}/docs/00a_LLM_Model_Transformer/)：模型/权重、训练/推理、Token/Embedding、逐层 Attention 与 Q/K/V 数字算例。
