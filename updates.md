@@ -13,7 +13,7 @@ permalink: /updates/
 - [引擎与共享缓存]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#deepinfer-storage-boundary)：补 DeepInfer 开源边界、Mooncake/LMCache/FlexKV 等集成、CMX 专用上下文层；第三篇增加多模态/混合状态/租户契约、事件路由和 HiCache 预取/rank 一致性。
 - [GPU 数据路径]({{ site.baseurl }}/docs/02_GPU_Data_Path/#cuobject-scada-evolution)：补 cuObject GA、xio-sig 互操作进展与 SCADA/Storage-Next，分清 GPU-direct、GPU-initiated、公告与实际支持。
 - [权重与训练数据流]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#weights-and-recovery)：补权重 daemon 故障域、RL 在线权重分发、中间状态流与 DSec/3FS 镜像按需读取选读。
-- 学习指南、README、闭卷变体与来源台账同步；Experiment A 增加部分恢复/局部重算成本输入和测试，仍是 CPU 参数模型。保留前置主线、预算、主题和页面路径；无真实 GPU/RDMA/引擎集成性能声明。
+- 学习指南、README、闭卷变体与来源台账同步，搜索改为收录全文，避免新内容落在截断范围之外；Experiment A 增加部分恢复/局部重算成本输入和测试，仍是 CPU 参数模型。保留前置主线、预算、主题和页面路径；无真实 GPU/RDMA/引擎集成性能声明。
 
 ## 2026-10-14 · 四篇 LLM 前置改为连续自学教程
 

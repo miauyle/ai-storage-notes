@@ -35,7 +35,7 @@ sitemap: false
     "category": {{ item.category | default: item.section | default: "" | jsonify }},
     "tags": {{ item.tags | join: " " | jsonify }},
     "excerpt": {{ item.description | default: item.excerpt | strip_html | normalize_whitespace | truncatewords: 32 | jsonify }},
-    "content": {{ body | strip_html | normalize_whitespace | truncatewords: 220 | jsonify }}
+    "content": {{ body | strip_html | normalize_whitespace | jsonify }}
   }
     {%- assign sep = "," -%}
 
