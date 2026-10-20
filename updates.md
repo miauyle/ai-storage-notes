@@ -7,6 +7,14 @@ permalink: /updates/
 
 这里记录已发布的**教程内容更新**，按北京时间排列。每条链接指向当前教程的对应位置；旧章节可能已被后来修订。站点样式、按钮和构建修复不计入内容更新。
 
+## 2026-10-21 · 推理状态、GPU I/O 与权重数据流维护更新
+
+- [状态与恢复]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#hybrid-state-budget)：补混合/递归/共享状态预算、DeepSeek 有界重放的近似边界、完整恢复/重算/部分恢复三候选。
+- [引擎与共享缓存]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#deepinfer-storage-boundary)：补 DeepInfer 开源边界、Mooncake/LMCache/FlexKV 等集成、CMX 专用上下文层；第三篇增加多模态/混合状态/租户契约、事件路由和 HiCache 预取/rank 一致性。
+- [GPU 数据路径]({{ site.baseurl }}/docs/02_GPU_Data_Path/#cuobject-scada-evolution)：补 cuObject GA、xio-sig 互操作进展与 SCADA/Storage-Next，分清 GPU-direct、GPU-initiated、公告与实际支持。
+- [权重与训练数据流]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#weights-and-recovery)：补权重 daemon 故障域、RL 在线权重分发、中间状态流与 DSec/3FS 镜像按需读取选读。
+- 学习指南、README、闭卷变体与来源台账同步，搜索改为收录全文，避免新内容落在截断范围之外；Experiment A 增加部分恢复/局部重算成本输入和测试，仍是 CPU 参数模型。保留前置主线、预算、主题和页面路径；无真实 GPU/RDMA/引擎集成性能声明。
+
 ## 2026-10-14 · 四篇 LLM 前置改为连续自学教程
 
 - [第一篇]({{ site.baseurl }}/docs/00a_LLM_Model_Transformer/)从普通程序、机器学习、参数和训练讲起，先解释数组再引入 Embedding 与 Q/K/V；同一补句请求贯穿编号、矩阵乘加、注意力与文字输出。

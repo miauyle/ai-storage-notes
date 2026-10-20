@@ -12,6 +12,7 @@ description: 从 LLM workload 推导 KV Cache 的容量、访问模式、缓存�
 > 面试版修订：2026-09-20。新增案例均为明确假设下的推演；本次重点复核 prefix caching 与 CUDA/传输相关边界，未将全部来源重新标为当日核实。
 > 2026-09-25：新增 KV × S3 × GPU 贯穿案例，并按 ECS/ObjectScale 的 Java 功能开发、Go telemetry 与实际排障经验校准前置；时间预算仍为教学假设。
 > 2026-10-03：补 Modern KV Stack 与职责定位，不扩大训练专题。
+> 2026-10-21：补近期存储演进案例，具体核对范围见来源台账；未把旧版本快照改称全面刷新。
 
 没有 AI 基础时，先读 [模型与 Transformer]({{ site.baseurl }}/docs/00a_LLM_Model_Transformer/) → [推理流程]({{ site.baseurl }}/docs/00b_LLM_Inference/) → [张量与显存]({{ site.baseurl }}/docs/00c_Tensor_Memory/) → [GPU 与存储衔接]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/)。本篇已有最小模型部分可作复习。
 
@@ -135,7 +136,7 @@ flowchart TD
 
 把这一过程具体化：假设某个 query 对三个历史位置算出的归一化权重为 `[0.1, 0.2, 0.7]`，那么该 head 的输出就是 `0.1×V_A + 0.2×V_B + 0.7×V_C`。K 用来决定“看哪里”，V 提供“取什么信息”。下一 token 的 Q 改变后，权重也会改变，因此不能只缓存上一轮的加权结果来替代全部 K/V。这是用于理解数据依赖的假设，不需要继续推导 softmax。
 
-每层都要做自己的这一步。只保存最后一层的 KV，无法供第一层的新 query 使用；把原始 token ID 存下来则只保存了重算输入，尚未保存昂贵的中间状态。
+在这里采用的逐层独立 KV 基线中，每层都要做自己的这一步。只保存最后一层的 KV，无法供第一层的新 query 使用；把原始 token ID 存下来则只保存了重算输入，尚未保存昂贵的中间状态。跨层共享等变体见 [§4.1 的状态预算](#hybrid-state-budget)，不改变这个基线算例。
 
 ### 1.3 为什么旧 K/V 可以缓存，旧 Q 通常不长期缓存
 
@@ -248,6 +249,45 @@ flowchart TD
 | Memory 随什么增长 | 参数、optimizer、activation、batch | 权重常驻；KV 随并发与上下文增长 |
 | 对尾延迟敏感度 | 慢 rank 可拖慢同步 step | 一次 miss 或 Decode 阻塞可直接让用户卡顿 |
 | 常见优化 | shard、预取、缓存、异步 checkpoint | prefix reuse、KV 分页、分层、调度与直达路径 |
+
+<a id="weights-and-recovery"></a>
+
+#### 权重缓存：引擎重启不一定重新读全部模型 — SHOULD KNOW
+
+假设推理进程退出，但同 GPU 上独立保存权重的进程仍活着。重新启动引擎时，可以重新取得这些权重的访问句柄，不必再次读取模型文件、转换并上传。SGLang 团队在 [2026-08-21 的 Weight Cache Daemon 文章](https://www.lmsys.org/blog/2026-08-21-sglang-fast-recovery)中采用常驻 GPU 进程持有权重，消费进程通过 CUDA IPC（同机跨进程共享 GPU allocation 的机制）映射；这不是跨节点 RDMA，也不是持久化备份。
+
+| 故障或变化 | 仍可复用什么 | 恢复还需做什么 |
+|---|---|---|
+| 引擎退出，daemon/GPU 存活 | 兼容的权重 allocation | 重建请求调度、通信和执行环境；请求 KV 另行恢复 |
+| daemon 退出或 GPU reset | 不能依赖原句柄与 allocation | 重新加载权重，更新句柄并重新绑定 consumer |
+| 节点失效 | 其他节点仍存活的副本或持久文件 | 新节点加载、分片校验和服务准入 |
+| 权重版本/量化/分片不匹配 | 不能盲目复用 | 检查匹配条件，选择受支持的转换或重新加载 |
+
+权重 ready、引擎 ready、请求恢复和 SLO 恢复是四个验收点。官方文章的权重加载结果不能当成全部启动时间，路线图目标也不能写成已完成。多个引擎共享权重后，私有 KV 与工作区仍各需预算；daemon 成为共享故障域。
+
+<a id="rl-data-movement"></a>
+
+#### RL 的在线权重更新与中间状态流 — SHOULD KNOW
+
+强化学习（RL）中，训练端更新参数，rollout worker 使用某个版本生成样本。两边可以独立部署，但必须传递权重和样本相关数据。以下是不同的数据流，不能都叫 checkpoint：
+
+| 数据流 | 保存/传递什么 | 完成条件 |
+|---|---|---|
+| 训练 checkpoint | 权重、optimizer、进度等恢复集合 | 同 step 的完整集合持久化并发布 |
+| Trainer→rollout 权重分发 | 某个新版本的推理参数 | 目标分片安装完且版本可用于新任务 |
+| 推理→训练中间状态流 | hidden states，即模型算出的中间数组 | 消费者取得正确样本/版本的全部输入，消费后释放 |
+
+[SGLang 2026-04-29 P2P weight update](https://www.lmsys.org/blog/2026-04-29-p2p-update/)介绍 RDMA 点对点权重传递，补充传统 NCCL broadcast。**教学设计：**给版本 v42 先分配独立目标或暂停读写，全部必要分片校验成功后再切换新任务；部分 worker 失败时隔离该版本、重试或回退，禁止让一次任务混读 v41/v42。传输 completion 只证明搬运阶段，不能代替安装和版本发布；也不意味着有了持久 checkpoint。具体框架支持什么更新协议需另验。
+
+[PyTorch TorchSpec（2026-03-19）](https://pytorch.org/blog/torchspec-speculative-decoding-training-at-scale/)给出另一例：生成中间状态的推理端与训练端分离，经 Mooncake Store 通过 RDMA/TCP 传递，减少全部预计算落盘。对存储工程师，重点是短期、一次消费的数据是否值得持久化。**假设**生产速度为 4 GiB/s、消费为 3 GiB/s，8 GiB 缓冲从空开始约 8 秒填满；网络再快也不能解决持续积压。需要背压、样本 ID、版本、重试去重和消费确认；失败时比较重新生成与保存到耐久层的成本。传输成功不等于训练已经消费。
+
+<a id="agent-storage-workload"></a>
+
+#### Agent 沙箱也会让存储进入关键路径 — NICE TO KNOW
+
+Agent 执行代码、调用工具时需要隔离环境。大量任务同时启动，会产生镜像分发、工作目录与恢复状态的 I/O，GPU 可能等的是环境，而非训练样本。[DSec 技术报告（2026-09）](https://arxiv.org/abs/2609.22978)描述从 3FS 按需加载镜像数据，以及沙箱生命周期与可抢占训练任务的协调。这里引用技术报告，不声称完整生产平台已经开源。
+
+**教学例子：**100 个沙箱各需 4 GiB 镜像，完整独立复制为 400 GiB；若启动只触达其中 10%，无缓存理想读取约 40 GiB，但后续缺页会把部分等待移到运行阶段。10% 是假设，并非 DSec 实测。应测环境 ready p99、首次访问缺页、共享层命中及后台预热争用；只报告“容器已创建”不能证明任务可以执行。镜像缓存、沙箱工作状态与训练 checkpoint 需要分开标版本和恢复边界，本月不展开沙箱实现。
 
 ### 2.4 把已有存储经验迁移到一个训练故障题 — SHOULD KNOW
 
@@ -408,6 +448,27 @@ sequenceDiagram
 | s | 每元素字节数 | FP16/BF16 为 2，常见 FP8 payload 为 1 |
 
 不同层形状不一时，对每层分别求和。不同请求长度不一时，对请求求和。这里先计算逻辑 payload；padding、block 浪费、allocator 元数据、量化 scale、复制和分片布局另加。
+
+<a id="hybrid-state-budget"></a>
+
+#### 新架构：先列实际状态，再代入公式 — SHOULD KNOW
+
+前面的公式假设每层独立保留同形状的历史 K/V。近期模型与引擎开始组合多种状态，不能只看逻辑层数乘一次。**滑窗**只访问最近一段历史；**递归状态**把过去逐步更新到一个状态数组；**跨层共享**让多个层引用同一份数据。它们改变不同假设：
+
+| 状态类型 | 应怎样算 | 恢复容易漏什么 |
+|---|---|---|
+| 普通全注意力 KV | 按真实层/head/位置/dtype 计数 | 索引、padding、分片/复制 |
+| 滑窗 KV | 按各层仍需保留的窗口与边界计算 | 当前窗口可继续运行，不代表任意旧位置可恢复 |
+| 递归状态 | 按状态 shape、dtype、快照副本计算 | 分支更新会覆盖历史，回退需快照或重算 |
+| 跨层共享/压缩 KV | 对物理共享对象计一次，再加私有状态 | 量化 scale、压缩索引与运行时工作区 |
+
+[Qwen 官方仓库](https://github.com/QwenLM/Qwen3.8)介绍的 Qwen3.5 混合 Gated Delta Network 与 MoE 是递归路径的现实例子；这里不把所有递归模块都叫同一种 SSM。[vLLM Hybrid KV Cache Manager](https://docs.vllm.ai/en/latest/design/hybrid_kv_cache_manager/)讨论按状态类型分组分配与匹配前缀；该页带有设计快照/早期实现警告，不当成当前所有模型的支持承诺。
+
+**算例：**假设 8 个全注意力层各保留 8,192 位置，24 个滑窗层各保留 512 位置，每层每位置 4 KiB，忽略其他开销。payload 是 `(8×8192 + 24×512)×4 KiB = 304 MiB`，而全按 32 层全历史计算会得到 1 GiB。这是教学几何；真实总 HBM 还需加权重、工作区和 allocator 保留。
+
+DeepSeek-V4.1-Flash 的 CED（先由因果 encoder 处理，再由 decoder 生成）与跨层共享、低位 KV 表示也说明：模型总参数量、global KV、运行时全部缓存和供复用的持久缓存，是不同口径。不要把某一项的压缩比例乘到整个服务内存。其恢复策略见 [§6.9](#partial-restore-replay)。
+
+**FP4 也不能只除以 4。** [官方模型卡](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash)描述 main KV 使用 FP4 E2M1，16 个通道配一个 E4M3 scale。只按这一组计，16 个 4-bit 数值占 8 bytes，再加 1-byte scale，共 9 bytes；原 FP16 16 个数占 32 bytes，因此这里是 `32/9≈3.56` 倍，不是 4 倍。这个算式没有包含其他缓存、索引、对齐或重建开销，不是整个模型压缩比。少位表示、减少物理副本、减少保留位置是三种独立变化；恢复端还须支持编码及 scale。
 
 ### 4.2 贯穿三份教程的假设模型
 
@@ -654,6 +715,14 @@ vLLM 当前 prefix caching 设计使用前块 hash、当前 token 和额外身�
 
 **Pinned memory 是内存属性，不是比 DRAM 更快的一种存储介质。Remote cache 与 Object Storage 也不是同义词。**
 
+<a id="cmx-context-tier"></a>
+
+#### CMX：专用共享上下文层的现实案例 — NICE TO KNOW
+
+[NVIDIA 2026-03-16 CMX 公告](https://developer.nvidia.com/blog/introducing-nvidia-bluefield-4-powered-inference-context-memory-storage-platform-for-the-next-frontier-of-ai/)介绍以 BlueField-4 和 STX 为基础的 pod 级 flash 上下文层，在本地内存与长期共享存储之间增加 G3.5 tier，并由 Dynamo/NIXL 协调预取与搬运。
+
+它改变的是部署选择：可复用但 HBM/DRAM 放不下的上下文，不必直接全压到通用对象存储。应比较本地 NVMe、共享 DRAM、专用 flash 层和对象冷层的容量、扇入和 load-to-ready p99。G3.5 是该平台的层级命名，不是所有系统必须采用的标准；flash 介质也不自动提供跨节点副本、耐久提交或任意引擎兼容。公告中的吞吐倍率不能移植为本教程容量输入，实际可用硬件/软件组合与性能需另验。
+
 ### 6.3 不必每次经过所有层
 
 ```mermaid
@@ -758,6 +827,20 @@ LMCache 是外部 KV 管理与复用层，可把 KV 放到 CPU、磁盘或远端
 
 **概念连接：**`Inference engine ↔ KV connector ↔ KV 管理层 ↔ storage/transport backend`。这条分工不保证任意版本可以互换；runtime ABI、模型/layout、connector、后端和 GPU 支持要组合验证。[LMCache 兼容性说明](https://docs.lmcache.ai/getting_started/compatibility.html)
 
+<a id="deepinfer-storage-boundary"></a>
+
+#### DeepInfer：引擎开源之后，哪些工作仍属于存储系统 — SHOULD KNOW
+
+[DeepInfer 官方 README](https://github.com/deepseek-ai/DeepInfer)在本次 2026-10-21 核对时提供 DeepSeek-V4.1-Flash 的离线推理、优化算子、并行执行、异步调度与有界重放等核心能力。完整服务所需的 KV cache system、VE/Prefill/Decode 分离部署和跨副本负载均衡明确列为本次发布未包含的部分；这不表示引擎内完全没有 KV allocation/管理，也不表示相关引擎支撑能力一概未实现。
+
+**面试回答：**引擎解决怎样计算和消费状态，外部系统还需解决兼容 prefix 的发现、存放、复用、传递、回收与故障降级。不能据此声称 DeepInfer 已可直接接 LMCache/Mooncake/NIXL，必须验证具体 connector。离线跑通一个模型，也不能证明集群路由、共享缓存和端到端 SLO 已完成。
+
+#### 从“有后端”到跨引擎集成
+
+[Mooncake 官方更新](https://github.com/kvcache-ai/Mooncake/blob/main/README.md)记录 LMCache MP 模式 Store adapter、FlexKV remote tier、vLLM/LMDeploy 共享池，以及 TensorRT-LLM KVCMv2 connector；后者 [PR #19171](https://github.com/NVIDIA/TensorRT-LLM/pull/19171)于 2026-10-10 合并。Dynamo 的共享缓存索引见第三篇 [事件与路由]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#shared-cache-routing)。
+
+这些集成证明接口在落地，不证明不同引擎生成的 KV bytes 可直接互换。安装时逐项记录 engine/model/connector/backend 的 release 或 commit、布局、分片与状态种类；LMCache MP（独立服务进程）也不是旧 in-process 示例的简单改名。不要为同一份 KV 同时堆叠多个管理层而重复写入、重复计费或争夺回收权。
+
 <a id="kv-restore-recompute-budget"></a>
 
 ### 6.8 把“取决于 tradeoff”变成一个可执行选择 — MUST KNOW
@@ -773,6 +856,24 @@ LMCache 是外部 KV 管理与复用层，可把 KV 放到 CPU、磁盘或远端
 **缓存整个会话为什么可能不经济？** 本例 8K prefix 的 KV 是 1 GiB；若 token ID 用 4 B 整数保存，仅 32 KiB，容量相差 32,768 倍。后者不含权重、会话元数据或多模态原始输入，也不能直接代替 KV 执行，但能作为重算输入的一部分。对极少恢复的会话，“保存输入、需要时重算”是必须比较的基线。
 
 **连续追问练习：**为什么 offload？为了释放 HBM或复用计算。为什么不全写对象层？低复用时写入和保留无净收益。带宽升级后是否全写？仍需看预计复用、GPU 重算成本及对在线流量的争用；带宽只改变其中一项。
+
+<a id="partial-restore-replay"></a>
+
+### 6.9 部分恢复与局部重算：先确认精确还是近似 — SHOULD KNOW
+
+前面比较“全恢复/全重算”，还有一种选择：只保存昂贵且值得复用的状态，再重建较便宜的部分。DeepSeek-V4.1-Flash [报告 §3.2](https://arxiv.org/html/2609.19969v1#S3.SS2)的 SWA Bounded Replay 保留全局状态，缺失滑窗 KV 时只重放有限后缀。
+
+**关键边界：这是近似恢复。** 多层滑窗依赖会累积，不能从单层窗口大小推出精确重建只需一个窗口。报告明确接受截断后缀带来的近似状态。缓存命中位置也可能影响后续状态；必须记录重放模式/边界并做质量评估，不能以 checksum 或“最终文本刚好一样”证明数学等价。
+
+串行教学预算：`partial_restore_ms = lookup + retained_bytes / B + conversion + replay_queue + replay_compute`。假设完整缓存 1 GiB、可保留部分 256 MiB，带宽 8 GiB/s，固定/转换 5 ms，局部重算 12 ms、无排队，全量重算 60 ms：
+
+| 选择 | 时间 | 结论 |
+|---|---:|---|
+| 完整恢复 | 5 + 125 = 130 ms | 比重算慢 |
+| 全量重算 | 60 ms | 原两选一会选它 |
+| 部分恢复 + 重放 | 5 + 31.25 + 12 = 48.25 ms | 仅在语义/质量允许且引擎支持时成为候选 |
+
+所有数字都是独立教学输入，256 MiB 不是对真实模型压缩率的推算。若 replay 排队增加 20 ms，第三条变成 68.25 ms，应重算。若接口不支持该恢复模式，则根本不能参加延迟比较；**语义正确性和允许的近似策略先过滤，成本模型再选择。** 可运行计算见第三篇 [Experiment A]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#kv-demo-experiments)，不是已执行真实 SWA kernel。
 
 ### Interview Check
 

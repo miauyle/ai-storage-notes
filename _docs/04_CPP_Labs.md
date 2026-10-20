@@ -151,6 +151,8 @@ fixture 使用位置相关的非密码学生成器，并逐字节比较预期切
 ```bash
 # A：参数扫描/CSV；是 estimated performance decision model，不是 GPU benchmark。
 python3 examples/cpp-data-path/restore_recompute.py --tokens 2048 8192 32768 --bandwidth-gibps 8 20 40 --csv
+# A：三候选教学预算；局部重算成本独立给定，不运行模型重放。
+python3 examples/cpp-data-path/restore_recompute.py --tokens 8192 --bandwidth-gibps 8 --partial-kv-bytes 268435456 --replay-ms 12 --csv
 # B：24 MiB 固定 workload，64 KiB/1 MiB/8 MiB × outstanding 1/2。
 python3 examples/cpp-data-path/test_async_pipeline.py build/cpp-labs/async_range_pipeline build/cpp-labs/s3_range_probe
 # B：显示 submit→verified→consume→release 与 pool wait 的原始 trace。

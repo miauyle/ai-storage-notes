@@ -24,7 +24,8 @@ jobs:
         run: ctest --test-dir build/cpp-labs --output-on-failure
 
   site-links:
-    runs-on: ubuntu-latest
+    # Match the OS supported by the pinned Playwright browser packages.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7

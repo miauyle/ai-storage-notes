@@ -196,6 +196,25 @@ NIXL 核对：[六问收口]({{ site.baseurl }}/docs/02_GPU_Data_Path/#nixl-inte
 
 录音复核只检查四件事：是否先回答问题、是否出现一个具体机制、是否有一个数字/时序、是否主动给出边界。不要把中文答案逐字翻译成长句。
 
+<a id="october-maintenance-drills"></a>
+
+### 维护更新追问：按 JD 选练，不新增一套必考链
+
+| 闭卷任务 | 条件变化后的追问 | 核对 |
+|---|---|---|
+| 8 个全局层、24 个窗口层，按正文假设算 304 MiB | 再加递归快照/跨层共享，哪些相加、哪些不能重复算？ | [状态预算]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#hybrid-state-budget) |
+| 比较 130/60/48.25 ms 三候选 | 重放排队加 20 ms；若不允许近似恢复，哪个候选必须先剔除？ | [部分恢复]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#partial-restore-replay) |
+| DeepInfer 离线推理跑通了 | 共享 KV、路由与 P/D 服务是否也已具备？用分层解释 | [引擎边界]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#deepinfer-storage-boundary) |
+| 图片相同，预处理或 encoder 版本不同 | embedding 与文本 KV 分别能否复用？递归分支拒绝后怎样回退？ | [状态契约]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#multimodal-state-contract) |
+| router 索引命中，但对象已被驱逐 | 事件丢失/乱序、rank 恢复长度不一、共享池挂掉分别怎样处理？ | [路由]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#shared-cache-routing)、第三篇 §4.3 |
+| CPU 请求把数据直接读到 GPU | 为什么还不能叫 GPU-initiated？cuObject GA 是否代表任意 S3 endpoint 可用？ | [cuObject/SCADA]({{ site.baseurl }}/docs/02_GPU_Data_Path/#cuobject-scada-evolution) |
+| 权重 daemon 存活时引擎重启 | 换成 GPU reset；权重 ready 和服务 ready 有何区别？ | [权重恢复]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#weights-and-recovery) |
+| 一半 rollout workers 已装新权重 | 如何防同任务混版本？在线分发是否等于 checkpoint 耐久？ | [RL 数据流]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#rl-data-movement) |
+| 中间状态生产 4、消费 3 GiB/s，缓冲 8 GiB | 何时满？消费者挂掉时丢弃、重算还是持久化？ | [RL 数据流]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#rl-data-movement) |
+| 使用 cache_salt 隔离 prefix | 为什么 salt 不等于后端鉴权？ | [租户边界]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#multimodal-state-contract) |
+
+CMX 与 Agent 镜像按需加载只要求知道改变了哪条存储假设，除 JD 相关外不增加源码/平台部署任务。新模型、产品支持与 benchmark 均须按来源台账复查。
+
 <a id="weekly-gates"></a>
 
 ## 5. 每周 Gate
