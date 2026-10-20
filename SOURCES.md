@@ -16,6 +16,30 @@ description: 记录高变化技术陈述的官方来源、核实边界与复查�
 4. 当 `latest` 页面内容改变时，优先更新陈述和核实日期；需要复现实验时另存 release/tag/commit，而不是依赖浮动链接。
 5. 每次事实复核只更新真正检查过的条目，不把局部复核写成全项目已刷新。
 
+<a id="2026-10-storage-refresh"></a>
+
+## 2026-10-21 AI Storage 维护核对（北京时间）
+
+本轮仅核对下表范围；发布日期与核实日期分开。代码合并、库 GA、平台公告、路线图与本仓库实测不是同一证据。下方旧 API/版本条目不因本表自动刷新。
+
+| 官方/原始来源 | 发布/证据状态 | 本轮采用与限制 |
+|---|---|---|
+| [DeepInfer README](https://github.com/deepseek-ai/DeepInfer) | 2026-10 开源，按本次 main 快照 | 离线引擎与完整 KV/P-D/负载均衡范围分开；未声称已接本站后端 |
+| [V4.1-Flash 报告 v1 §2/3.2](https://arxiv.org/html/2609.19969v1)、[模型卡](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash) | 报告 2026-09-17；模型卡浮动 | 跨层共享/低位缓存与 bounded replay；强调近似状态、口径差异，不用压缩倍率推算总 HBM |
+| [Qwen 官方仓库](https://github.com/QwenLM/Qwen3.8)、[vLLM hybrid manager](https://docs.vllm.ai/en/latest/design/hybrid_kv_cache_manager/) | Qwen 仓库保留 Qwen3.5 介绍；vLLM 为带警告的设计快照 | 递归/滑窗/普通 KV 不同；不声明任意混合架构已支持同一恢复协议 |
+| [Mooncake 更新记录](https://github.com/kvcache-ai/Mooncake/blob/main/README.md)、[TRT-LLM #19171](https://github.com/NVIDIA/TensorRT-LLM/pull/19171) | Store/TE 集成记录；TRT PR 2026-10-10 merged | LMCache MP、FlexKV、vLLM/LMDeploy、KVCMv2 集成与多模态缓存；不保证跨引擎布局互换 |
+| [Dynamo #11239](https://github.com/ai-dynamo/dynamo/pull/11239) | 2026-07-31 merged，Mooncake 8 月更新介绍 | KV event 索引案例；本文 epoch/对账/回退协议为教学设计，不归功于该 PR |
+| [HiCache 设计](https://docs.sglang.io/docs/advanced_features/hicache_design) | 在线实现说明，未虚构本月首次发布 | 预取停止、写回和 rank 一致边界；不照搬默认 timeout 为 SLO |
+| [cuObject / xio-sig / SCADA 公告](https://developer.nvidia.com/blog/expanding-ai-storage-access-with-nvidia-cuobject-and-the-nvidia-scada-server-sdk/) | 2026-09-30；库 GA、协议开放有条件、SDK 公告 | GPU-direct 与 GPU-initiated 分开；不是所有 S3 已互通，不更改旧 client/server API 支持快照 |
+| [CMX 技术公告](https://developer.nvidia.com/blog/introducing-nvidia-bluefield-4-powered-inference-context-memory-storage-platform-for-the-next-frontier-of-ai/) | 2026-03-16 平台公告 | G3.5 为平台层级用语；不采用宣传倍率，不推断耐久与部署支持 |
+| [Weight Cache Daemon](https://www.lmsys.org/blog/2026-08-21-sglang-fast-recovery) | 2026-08-21 实现介绍，含后续路线图 | CUDA IPC 权重存活域、恢复阶段分开；不把 warm/加载速度当完整服务启动速度 |
+| [SGLang P2P 更新](https://www.lmsys.org/blog/2026-04-29-p2p-update/) | 2026-04-29 实现介绍 | 在线权重搬运不等于 checkpoint；版本切换协议为教学设计 |
+| [TorchSpec](https://pytorch.org/blog/torchspec-speculative-decoding-training-at-scale/) | 2026-03-19 框架介绍 | 中间状态流替代全量落盘的案例；不推广原 benchmark；缓冲算例为假设 |
+| [DSec 报告](https://arxiv.org/abs/2609.22978) | 2026-09 技术报告 | 3FS 镜像按需加载与沙箱/训练生命周期；不声称完整平台开源 |
+| [vLLM prefix caching](https://docs.vllm.ai/en/stable/design/prefix_caching/) | 本轮复核现有 cache_salt 能力 | salt 隔离不替代授权、ACL 与加密；不是新发布宣称 |
+
+所有新增容量/延迟数字是教学输入。Experiment A 只验证串行三候选成本与决策，不实现模型、SWA、状态兼容或质量评估。实际接入仍需记录 release/tag/commit，测试同输入恢复、输出/质量、错误与资源寿命。复查触发：引擎/模型/后端升级，恢复策略或租户共享策略变化，或开始引用产品性能数字。
+
 ## LLM 前置依据（2026-10-13，北京时间）
 
 | 原始/官方来源 | 本次核对范围 | 边界 |

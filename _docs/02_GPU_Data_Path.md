@@ -11,6 +11,7 @@ description: 理解 Storage 到 GPU 的数据路径、ownership、DMA 与完成�
 > 面试版修订：2026-09-20；本次复核 CUDA 同步/异步说明、verbs MR/post-send 与 cuObject 页面。新增时序与性能案例为教学假设。
 > 2026-09-25：新增冷 KV Range GET 贯穿案例及通用对象服务端前台读路径；Java→C++ 的 buffer 前置也做了补充。未对所有外部资料重新核实。
 > 2026-10-03：NIXL 升为 SHOULD KNOW；cuObject 按本次官方 overview/API/release notes 复核，其他旧来源未全量刷新。
+> 2026-10-21：补近期存储演进案例，具体核对范围见来源台账；未把旧版本快照改称全面刷新。
 
 若 GPU、kernel、HBM 或矩阵计算还陌生，先读[GPU 推理与存储需求]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/#gpu-hbm)；本篇继续解释具体搬运机制和生命周期。
 
@@ -831,6 +832,24 @@ S3 API 是广泛兼容的对象 API 体系；RDMA/IB/RoCE 有各自规范与生�
 **面试收口：为什么 S3 over RDMA 不只是把 HTTP 换成 RDMA？** 因为 S3 请求仍承担 namespace、鉴权、版本、Range/multipart 与提交语义；协商后 RDMA 主要承担 payload data movement。需要改的是两端 SDK/server 的 buffer capability、完成/错误与重试契约，而不是替换一条 URL 的 scheme。
 
 本月不背其完整函数签名。你应能解释上述角色，并指出落地依赖的 SDK/server、DC-capable transport、GPU mapping 与完成语义。**不要把通用 verbs 学习时的 RC 示例，直接当成当前 cuObject 的 transport 实现。**
+
+<a id="cuobject-scada-evolution"></a>
+
+#### 2026-09-30：cuObject 互操作与 SCADA — SHOULD KNOW / NICE TO KNOW
+
+[NVIDIA 公告](https://developer.nvidia.com/blog/expanding-ai-storage-access-with-nvidia-cuobject-and-the-nvidia-scada-server-sdk/)宣布 cuObject client/server libraries GA，并推进将 cuObject 纳入 xio-sig，目标是共享 API 与 RDMA wire protocol 的互操作。GA 不等于任意对象服务端已经接入；公告也说明部分头文件、协议和实现代码会在生产栈通过一致性测试后分享。不能把未来开放计划写成当前已全部公开，更不能把互操作倡议当成通用 S3 标准已经强制支持 RDMA。
+
+同一公告的 SCADA（Scaled Accelerated Data Access）Server SDK 面向接收 GPU 发起请求的存储服务端，Storage-Next 关注 GPU 驱动的细粒度 I/O。先分清两条轴：
+
+| 问题 | GPU-direct data movement | GPU-initiated I/O |
+|---|---|---|
+| 改变什么 | payload 可以不经 host bounce，直接到 GPU | 请求由 GPU 上的程序发起 |
+| 谁发起请求 | 仍可能是 CPU 程序 | GPU 程序，通过受支持的请求机制 |
+| 仍须谁处理 | 权限、注册、完成、错误和生命周期 | 还需请求队列、流控、服务端执行与 GPU 等待协议 |
+
+CPU 发起 cuObject GET，数据进入 GPU，并不能据此叫 GPU-initiated。SCADA 是另一条需要专门集成的路径，不是给普通 S3 URL 换 scheme，也不能从此推断所有 cuFile/cuObject 调用可从 kernel 内直接执行。
+
+**教学判断：**把一个 64 MiB 请求拆成 16,384 个 4 KiB 请求，bytes 不变，但请求处理、队列和完成压力急增。GPU 发起访问仍要靠批量、并发上限与访问局部性控制这些成本。验证应分别计请求来源、server service time、payload 路径、ready latency 和失败回收。面试应能分清两轴；本月不要求实现 SCADA server。具体双端 API/DC 与 completion 约束仍按上面的版本快照核实，不能用新公告替代 release notes。
 
 ### 7.4 RDMA / GPU-aware S3 GET：面试架构图
 

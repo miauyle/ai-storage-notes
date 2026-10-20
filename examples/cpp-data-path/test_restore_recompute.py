@@ -4,7 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
-from restore_recompute import calculate, GIB
+from restore_recompute import calculate, add_partial_candidate, GIB
 
 
 class ModelTests(unittest.TestCase):
@@ -53,6 +53,48 @@ class ModelTests(unittest.TestCase):
         rows = list(csv.DictReader(io.StringIO(output)))
         self.assertEqual(len(rows), 4)
         self.assertEqual({r["decision"] for r in rows}, {"restore", "recompute"})
+
+    def test_partial_replay_and_queue_reversal(self):
+        full = calculate(8192, 131072, 8, 5, 0, 60)
+        r = add_partial_candidate(full, GIB // 4, 12)
+        self.assertEqual(r["partial_restore_ms"], 48.25)
+        self.assertEqual(r["decision"], "partial_restore")
+        r = add_partial_candidate(full, GIB // 4, 12, 20)
+        self.assertEqual(r["partial_restore_ms"], 68.25)
+        self.assertEqual(r["decision"], "recompute")
+        self.assertEqual(full["decision"], "recompute")  # no mutation
+
+    def test_partial_ties_and_full_restore_winner(self):
+        full = calculate(8192, 131072, 8, 5, 0, 60)
+        self.assertEqual(add_partial_candidate(full, GIB // 4, 23.75)["decision"], "recompute")
+        full = calculate(8192, 131072, 40, 5, 0, 60)
+        self.assertEqual(add_partial_candidate(full, GIB, 0)["decision"], "restore")
+        self.assertEqual(add_partial_candidate(full, GIB // 4, 30)["decision"], "restore")
+        # Same bytes plus zero replay leaves the original decision unchanged.
+        self.assertEqual(add_partial_candidate(full, GIB, 0)["restore_ms"], 30)
+
+    def test_invalid_partial(self):
+        full = calculate(8192, 131072, 8, 5, 0, 60)
+        for retained, replay, queue in [(0, 1, 0), (-1, 1, 0), (GIB + 1, 1, 0),
+                                       (1, -1, 0), (1, 1, -1), (1, float("nan"), 0),
+                                       (1, 1, float("inf")), (float("inf"), 1, 0),
+                                       (1, 1e308, 1e308)]:
+            with self.assertRaises(ValueError):
+                add_partial_candidate(full, retained, replay, queue)
+
+    def test_partial_cli_and_argument_pair(self):
+        tool = str(Path(__file__).with_name("restore_recompute.py"))
+        base = [sys.executable, tool, "--tokens", "8192", "--bandwidth-gibps", "8"]
+        output = subprocess.check_output(base + ["--partial-kv-bytes", str(GIB // 4),
+                                                "--replay-ms", "12", "--csv"], text=True)
+        rows = list(csv.DictReader(io.StringIO(output)))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["decision"], "partial_restore")
+        self.assertEqual(float(rows[0]["partial_restore_ms"]), 48.25)
+        for extra in [["--partial-kv-bytes", "1"], ["--replay-ms", "1"],
+                      ["--replay-queue-ms", "1"]]:
+            result = subprocess.run(base + extra, capture_output=True)
+            self.assertEqual(result.returncode, 2)
 
 
 if __name__ == "__main__":

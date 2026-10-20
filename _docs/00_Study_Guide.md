@@ -45,6 +45,21 @@ description: 按 90/60 小时预算学习、动手和复测，把已有对象存
 
 **长 schema、状态名、接口签名是查阅材料。** 重点是完整后发布、在途资源不能提前回收、恢复成本与重算成本的比较。会背状态名却不能解释一次失败，不算通过。
 
+<a id="october-storage-refresh"></a>
+
+### 2026-10 维护更新：按目标岗位替换阅读
+
+先完成四篇前置，再读新增案例；不把新架构名词塞进零基础主线。以下替换已有定向阅读和变体练习，90/60 小时总预算不变：
+
+| 目标 | 更新入口 | 停止线 |
+|---|---|---|
+| KV / 推理状态 | 第一篇[混合状态]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#hybrid-state-budget)、[部分恢复]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#partial-restore-replay)、[DeepInfer 边界]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#deepinfer-storage-boundary)；第三篇[契约]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#multimodal-state-contract)与[路由]({{ site.baseurl }}/docs/03_System_Design_Interview_Demo/#shared-cache-routing) | 会算、会判断恢复/近似/回退，不通读模型源码 |
+| GPU Data Path / S3 RDMA | 第二篇[cuObject 互操作与 SCADA]({{ site.baseurl }}/docs/02_GPU_Data_Path/#cuobject-scada-evolution) | 分清请求发起者与 payload 路径，能设计验证 |
+| 权重、恢复、训练 I/O | 第一篇[权重缓存]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#weights-and-recovery)、[在线更新/状态流]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#rl-data-movement) | 分清发布、耐久与消费，能解释失败边界 |
+| 选读 | 第一篇[CMX]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#cmx-context-tier)、[Agent 存储]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#agent-storage-workload) | 知道 workload 与层级变化，不扩建平台 |
+
+已掌握基础者，从[维护追问]({{ site.baseurl }}/docs/00_Interview_Drills/#october-maintenance-drills)选两三题，答错再回读。Experiment A 新增三候选成本计算仍是 CPU 参数模型；不能写成已实现模型重放或真实 GPU/RDMA。
+
 <a id="time-budget"></a>
 
 ## 3. 90 小时与 60 小时：动手不是额外加班

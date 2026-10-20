@@ -33,6 +33,8 @@ Run from repository root:
 python3 examples/cpp-data-path/restore_recompute.py --tokens 2048 8192 32768 --bandwidth-gibps 8 20 40 --csv
 # A: no finite positive crossover (fixed latency + conversion >= recompute).
 python3 examples/cpp-data-path/restore_recompute.py --tokens 8192 --latency-ms 50 --conversion-ms 10 --prefill-ms 60
+# A: semantically pre-approved partial restore + replay; these are assumptions.
+python3 examples/cpp-data-path/restore_recompute.py --tokens 8192 --bandwidth-gibps 8 --partial-kv-bytes 268435456 --replay-ms 12 --csv
 # B: starts/stops the local fixture, scans 64 KiB/1 MiB/8 MiB × outstanding 1/2.
 python3 examples/cpp-data-path/test_async_pipeline.py build/cpp-data-path/async_range_pipeline build/cpp-data-path/s3_range_probe
 # B: one trace; first consumer waits until pool exhaustion is observed, no sleeps.
@@ -48,6 +50,18 @@ A accepts `--bytes-per-token` or `--kv-bytes`, `--latency-ms`,
 CSV includes all inputs, `kv_bytes/kv_gib`, `restore_ms`, `recompute_ms`,
 `crossover_gibps` (empty when absent), and `decision`; numerical ties choose recompute.
 Redirect stdout to a local CSV if desired; do not commit machine benchmark times.
+
+Optional `--partial-kv-bytes` and `--replay-ms` must be supplied together.
+`--replay-queue-ms` supplies an independent replay queue (default 0).
+The example above compares full restore 130 ms, full recompute 60 ms, and
+partial restore/replay 48.25 ms. Adding `--replay-queue-ms 20` changes the winner
+to full recompute. Retained bytes must be positive and no greater than full KV.
+The optional CSV adds retained size, replay costs, and `partial_restore_ms`;
+`crossover_gibps` still concerns only full restore versus full recompute.
+Ties retain the existing candidate; default output stays unchanged.
+Callers must filter incompatible or disallowed approximate recovery modes first.
+This is only a serial cost model: it does not run SWA replay, validate model
+states or output quality, or implement GPU transfers.
 
 B holds exactly two pre-sized vectors (`2 × chunk_bytes`), reuses one curl easy
 handle per producer, and keeps each buffer until consumer verification finishes.

@@ -11,6 +11,7 @@ description: 分布式 KV Cache 系统设计、面试答案与 Demo 规格。
 > 面试版修订：2026-09-20。重点补充连续追问、容量落地、故障预算与闭卷验收；完整接口作为后续实现参考。
 > 2026-09-25：新增冷 Prefix 跨 S3/GPU 案例，校准 ECS/ObjectScale 个人项目卡，并把可选 Demo 统一为 C++ 基线与模拟；所有数值推演仍为教学输入。
 > 2026-10-03：补三类场景、Compatibility Contract、A/B/C 实验规格与排障矩阵；未宣称新硬件/集成实验通过。
+> 2026-10-21：补近期存储演进案例，具体核对范围见来源台账；未把旧版本快照改称全面刷新。
 
 若还无法解释 1 GiB Prefix 的来源与恢复意义，先完成[KV 容量推导]({{ site.baseurl }}/docs/00c_Tensor_Memory/#kv-formula)与[恢复/重算交点]({{ site.baseurl }}/docs/00d_GPU_Storage_Bridge/#restore-recompute)，再进入本篇设计。
 
@@ -279,6 +280,18 @@ TTL 用于保留策略和清理，不能修补错误 key。模型升级用 names
 
 **面试追问：**“两个 worker 能连通、搬完且 checksum 相同，为什么输出仍可能错？”先分别排 identity、representation、runtime；完成/设备可见性检查还要独立成立。
 
+<a id="multimodal-state-contract"></a>
+
+#### 2.6 多模态、混合状态与租户：不再只验证一个 KV blob — SHOULD KNOW
+
+图片先经视觉编码器变成中间数组（visual embeddings），语言模型再使用它们。EPD 是 Encode/Prefill/Decode 分开部署；encoder output transfer 与 P/D KV transfer 搬的是不同对象。[Mooncake 更新记录](https://github.com/kvcache-ai/Mooncake/blob/main/README.md)列出 SGLang 全局 encoder cache，以及 vLLM 2026-09 的跨实例 embedding reuse/encoder-cache transfer。它们是具体集成，不能推广到所有多模态引擎。
+
+**教学例子：**同一图片字节没变，但 resize/crop、预处理版本或视觉编码器权重变了，原 embedding 未必可用；同一 embedding 也不代表不同文字前缀生成的 KV 相同。缓存键应包含数据类型、内容身份、预处理与模型版本、数值表示及授权域。外部 URL/用户指定 UUID 不能无条件作为可信内容身份。
+
+对混合模型，把恢复内容列成状态集合：全局 KV、必要窗口、递归状态快照、索引/scale 等。每项必须对应同一逻辑恢复位置；缺一项时按受支持策略重建或 miss。推测生成的分支要用私有可变状态，拒绝后缀时恢复到已接受边界，不能仅截断普通 KV 页却保留更新过的递归状态。若启用[近似有界重放]({{ site.baseurl }}/docs/01_AI_Storage_KV_Cache/#partial-restore-replay)，manifest/握手还应描述其模式与恢复位置，验收加入质量退化检查。
+
+**共享不等于跨租户任意复用。** [vLLM prefix caching](https://docs.vllm.ai/en/stable/design/prefix_caching/)支持 `cache_salt`，将隔离信息加入首块 hash，使不同 salt 的请求不共享 prefix；这是现有能力的本轮复核，并非本月新发布。salt 不替代身份鉴权、后端 ACL 或传输加密，不能任由不同租户猜到同一 salt 就获得共享权限。建议由可信服务端按授权域管理复用边界；跨租户复用需明确策略，否则即使读不到 bytes，也可能从延迟差推测缓存内容。
+
 ### Interview Check
 
 **30 秒回答 — How do you identify a KV block?**
@@ -432,6 +445,12 @@ Eviction 决定“空间不够赶谁走”；admission 决定“新块值不值�
 
 **错误预取成本**：下载但没用的 bytes、无效对象请求、被占的 MR/pinned pool、HBM 驱逐、额外转换、取消后的在途访问，以及对他人 p99 的影响。仅看平均下载速度会漏掉这些成本。
 
+#### HiCache：把预取停止与多 rank 一致性落到实现案例
+
+[SGLang HiCache 设计文档](https://docs.sglang.io/docs/advanced_features/hicache_design)区分本地匹配、L3 预取与写回；预取可 best-effort、等待完成或按 timeout 停止。多 rank 需要共同认可可用的连续 prefix 长度，不能某 rank 恢复 6K，另一个只恢复 4K，却都按 6K 开始计算。
+
+**教学判断：**8K 输入，已恢复并验证前 4K，后 4K 超过 deadline。若引擎支持部分命中，就共同使用可用的连续边界、重算其余；不支持则按原协议回退。停止等待不代表 DMA 已停，未完成目标仍按 §5.2 drain/隔离。写回也应按价值选择；write-through、选择性写回与驱逐时写回会产生不同的带宽/丢失风险，缓存策略名称不代表对象耐久性。不要直接拿在线文档的秒级默认 timeout 当低 TTFT 服务预算。
+
 ### 4.4 Promotion / demotion 不要求对称
 
 | 路径 | 适用情形 | 关键决定 |
@@ -450,6 +469,18 @@ Eviction 决定“空间不够赶谁走”；admission 决定“新块值不值�
 `queue_A + remaining_compute_A` 与 `queue_B + restore_or_prefill_B + remaining_compute_B`。
 
 Cache-aware routing 应结合负载；否则热门前缀会把一个节点变成热点。策略可复制热门 prefix 到多个 worker，代价是 HBM 占用与网络预热。对 RDMA remote cache 同样要限制 fan-in、NIC 和 CQ 压力。
+
+<a id="shared-cache-routing"></a>
+
+#### 4.6 共享缓存事件、路由索引与实际可读性 — SHOULD KNOW
+
+Dynamo [PR #11239](https://github.com/ai-dynamo/dynamo/pull/11239)把 Mooncake KV events 接入路由索引；Mooncake 在 2026-08 的更新中介绍了该集成。事件驱动避免每次请求扫描共享池，但索引是决策线索，不能当成数据锁或永久可读承诺。
+
+**下面是教学恢复协议，不宣称该 PR 实现了全部步骤：**数据可用后发布新增事件，驱逐后撤销位置；路由读取索引并估算排队/恢复成本；worker 用实际 lookup 与 lease 确认可读性；失效就试其他副本或受控重算。事件重复需幂等，乱序需版本/epoch 判断，漏事件需重建或对账。不要只靠 TTL 假设永远不会 stale。
+
+假设 A 有 prefix 但排队 80 ms，B 无本地缓存但从共享池恢复 20 ms、计算 10 ms，忽略共同开销，应优先比较 B 的 30 ms。若索引误报，B 的恢复失败还会新增成本；记录 false-hit、fallback、事件 lag、索引重建和队列时间，不只看 hit rate。
+
+共享池故障时限制重算准入、单租户并发和重试预算，保护活跃 Decode。TE 连得通不代表 Store 命中，Store 命中不代表 router 知道，router 知道也不代表 GPU ready。跨引擎共享仍受 §2.5/2.6 的 contract 约束。
 
 ### Interview Check
 
@@ -1153,6 +1184,16 @@ python3 examples/cpp-data-path/restore_recompute.py --tokens 2048 8192 32768 --b
 支持 `--bytes-per-token` 或 `--kv-bytes`、`--latency-ms`、`--conversion-ms`（含 visibility）、`--prefill-ms`、`--compute-queue-ms`。CSV 保留输入、KV bytes/GiB、restore/recompute ms、临界 GiB/s 与 decision；没有临界点时 CSV 字段留空，相等选择 recompute。自动测试覆盖两侧、临界附近、单位及无有限正交点。**这是 performance decision model，不是 GPU benchmark。**
 
 8,192 tokens 一行应为 1 GiB：8/20/40 GiB/s 分别得到 130/55/30 ms，临界带宽约 18.18 GiB/s；相等时无延迟收益。若 `recompute_ms <= fixed_ms`，这个模型没有有限正临界带宽，应直接判不值得恢复，而不是输出负带宽。也可扫描长度：固定 bytes/token 与成本假设下 `T_cross = (recompute_ms-fixed_ms)/1000 × B × 2^30 / bytes_per_token`；实际 prefill 随长度变化时改用测量表求交点。
+
+**第三个候选：部分恢复 + 局部重算。** 工具可显式加入 retained size 和 replay 成本：
+
+```bash
+python3 examples/cpp-data-path/restore_recompute.py --tokens 8192 --bandwidth-gibps 8 --partial-kv-bytes 268435456 --replay-ms 12 --csv
+```
+
+教学输出为 full restore 130 ms、recompute 60 ms、partial restore 48.25 ms，选择 `partial_restore`。`--replay-queue-ms 20` 会使第三条变为 68.25 ms，选择 `recompute`。`crossover_gibps` 仍只表示原完整恢复与重算的交点，三候选结果看各自成本与 decision。
+
+只有语义策略已允许的候选才能传给这个成本模型；程序不验证模型质量、重放边界或真实状态兼容。它没有实现 SWA/attention，不证明近似恢复与重算等价；新测试只覆盖三候选选择、排队反转、相等与非法输入。默认命令保持原两候选行为。
 
 **证据交付：**保存每档输入与 `restore_ms/recompute_ms/crossover/decision` 的 CSV；至少一档命中仍重算，至少一档恢复胜出。参数模型只证明决策逻辑；真实 S3→Host 测量不能直接填成 GPU-ready 时间。
 

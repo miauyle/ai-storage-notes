@@ -1,7 +1,7 @@
 # AI Storage 一个月面试冲刺教程
 
 > 面向 Dell EMC ECS/ObjectScale 工程师（3 年 10 个月）：Java 为复制/迁移/CRR 功能开发主力；Go 用于运行数据 telemetry 采集与统计，Python 曾用于工作。
-> 面试主线修订：2026-10-14 · 中文教程，保留英文术语与英文短答。
+> 面试主线修订：2026-10-21 · 中文教程，保留英文术语与英文短答。
 >
 > 目标：用约一个月准备 KV Cache × GPU Data Path × S3 over RDMA 交汇处的存储岗位，并在准备过程中开始针对性投递。
 
@@ -61,6 +61,21 @@
 | 无 GPU/RDMA 实验室如何给工程证据、如何分段排障 | [A/B/C 实验规格](_docs/03_System_Design_Interview_Demo.md#kv-demo-experiments)、[Troubleshooting Matrix](_docs/03_System_Design_Interview_Demo.md#inference-troubleshooting)；设计、计算与已运行测试分开 |
 
 2026-10-13 补齐 LLM 前置，解决零 AI 基础的阅读跳跃；现有存储专题与 Demo 范围保持，仓库继续维护模式。已有生产经历可迁移的是 distributed data movement、failure/retry/idempotency、metadata/state、S3 semantics、容量、backpressure 和证据驱动排障；CUDA/GPU/pinned memory、RDMA/GPUDirect、NIXL、KV layout、runtime 与 P/D 仍是需要新学的能力。C++ 仅用于转向岗位的数据路径练习，不改写过去 Java/Go/Python 经历。
+
+## 2026-10-21 · AI Storage 维护更新
+
+在原有章节中补齐近期会改变存储判断的进展；[按 JD 阅读入口](_docs/00_Study_Guide.md#october-storage-refresh)，[闭卷变体](_docs/00_Interview_Drills.md#october-maintenance-drills)。保留四篇零基础主线、30 天预算与 A/B/C 范围。
+
+| 变化 | 教程中的落点 |
+|---|---|
+| 混合/递归/共享状态与 DeepSeek 有界重放 | [物理状态预算](_docs/01_AI_Storage_KV_Cache.md#hybrid-state-budget)、[部分恢复与近似边界](_docs/01_AI_Storage_KV_Cache.md#partial-restore-replay)；A 增加三候选成本计算 |
+| DeepInfer、Mooncake/LMCache/FlexKV 等集成 | [引擎与存储边界](_docs/01_AI_Storage_KV_Cache.md#deepinfer-storage-boundary)、[事件/路由](_docs/03_System_Design_Interview_Demo.md#shared-cache-routing) |
+| 多模态、分支与多租户 | [兼容与隔离契约](_docs/03_System_Design_Interview_Demo.md#multimodal-state-contract)；HiCache 预取与多 rank 一致性案例 |
+| cuObject GA、xio-sig、SCADA / Storage-Next | [GPU-direct 与 GPU-initiated](_docs/02_GPU_Data_Path.md#cuobject-scada-evolution)；协议倡议、发布与部署验证分开 |
+| 权重恢复、RL 权重分发、中间状态流 | [权重恢复](_docs/01_AI_Storage_KV_Cache.md#weights-and-recovery)、[三种数据流](_docs/01_AI_Storage_KV_Cache.md#rl-data-movement) |
+| CMX 与 DSec/3FS | [专用上下文层](_docs/01_AI_Storage_KV_Cache.md#cmx-context-tier)、[Agent 镜像按需读取](_docs/01_AI_Storage_KV_Cache.md#agent-storage-workload)，均为选读 |
+
+新条目的官方来源与核实边界见 [SOURCES](SOURCES.md#2026-10-storage-refresh)。未复核的旧版本快照保留原日期，未做 GPU/RDMA/引擎集成实测。
 
 ## 这次补深的内容，优先读哪里
 
