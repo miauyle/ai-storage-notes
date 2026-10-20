@@ -282,7 +282,7 @@ TTL 用于保留策略和清理，不能修补错误 key。模型升级用 names
 
 <a id="multimodal-state-contract"></a>
 
-#### 2.6 多模态、混合状态与租户：不再只验证一个 KV blob — SHOULD KNOW
+### 2.6 多模态、混合状态与租户：不再只验证一个 KV blob — SHOULD KNOW
 
 图片先经视觉编码器变成中间数组（visual embeddings），语言模型再使用它们。EPD 是 Encode/Prefill/Decode 分开部署；encoder output transfer 与 P/D KV transfer 搬的是不同对象。[Mooncake 更新记录](https://github.com/kvcache-ai/Mooncake/blob/main/README.md)列出 SGLang 全局 encoder cache，以及 vLLM 2026-09 的跨实例 embedding reuse/encoder-cache transfer。它们是具体集成，不能推广到所有多模态引擎。
 
@@ -472,7 +472,7 @@ Cache-aware routing 应结合负载；否则热门前缀会把一个节点变成
 
 <a id="shared-cache-routing"></a>
 
-#### 4.6 共享缓存事件、路由索引与实际可读性 — SHOULD KNOW
+### 4.6 共享缓存事件、路由索引与实际可读性 — SHOULD KNOW
 
 Dynamo [PR #11239](https://github.com/ai-dynamo/dynamo/pull/11239)把 Mooncake KV events 接入路由索引；Mooncake 在 2026-08 的更新中介绍了该集成。事件驱动避免每次请求扫描共享池，但索引是决策线索，不能当成数据锁或永久可读承诺。
 
