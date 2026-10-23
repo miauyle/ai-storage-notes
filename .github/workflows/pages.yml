@@ -21,9 +21,9 @@ jobs:
     steps:
       - name: Use the standard Ubuntu archive for browser dependencies
         run: |
-          for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
+          for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list /etc/apt/apt-mirrors.txt /etc/apt/mirrors/*.list; do
             if [ -f "$source_file" ]; then
-              sudo sed -i 's/azure.archive.ubuntu.com/archive.ubuntu.com/g' "$source_file"
+              sudo sed -i -e 's/azure\.archive\.ubuntu\.com/archive.ubuntu.com/g' -e 's|http://archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source_file"
             fi
           done
       - uses: actions/checkout@v7
