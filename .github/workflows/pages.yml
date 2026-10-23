@@ -62,6 +62,8 @@ jobs:
         run: |
           "$RUNNER_TEMP/site-deps/node_modules/.bin/playwright" install --with-deps webkit
           NODE_PATH="$RUNNER_TEMP/site-deps/node_modules" node maintenance/check_webkit_icons.cjs /ai-storage-notes
+      - name: Verify system, light and dark modes in Chromium and WebKit
+        run: NODE_PATH="$RUNNER_TEMP/site-deps/node_modules" node maintenance/check_theme_mode.cjs /ai-storage-notes
       - name: Validate Edit this page links
         run: |
           ruby <<'RUBY'
