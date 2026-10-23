@@ -51,7 +51,7 @@
         rendering = true;
         while (pending) {
           pending = false;
-          const dark = root.dataset.mode === 'dark' || (!root.dataset.mode && preference.matches);
+          const dark = root.dataset.mode === 'dark' || (root.dataset.mode !== 'light' && root.dataset.mode !== 'dark' && preference.matches);
           mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default', flowchart: { htmlLabels: false } });
           for (let index = 0; index < diagrams.length; index++) {
             const node = diagrams[index];

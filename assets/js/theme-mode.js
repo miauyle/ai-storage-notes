@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   function sync() {
     const mode = preference();
-    root.dataset.mode = mode;
+    if (root.dataset.mode !== mode) root.dataset.mode = mode;
     const effective = mode === 'auto' ? (media.matches ? 'dark' : 'light') : mode;
     button.textContent = mode === 'auto' ? '◐' : effective === 'dark' ? '☾' : '☀';
     button.setAttribute('aria-label', '页面外观：' + choices[mode]);
@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     item.tabIndex = -1;
     item.textContent = label;
     item.addEventListener('click', () => {
-      root.dataset.mode = mode;
+      if (root.dataset.mode !== mode) root.dataset.mode = mode;
       try { localStorage.setItem('docsteer-mode', mode); } catch (_) {}
       sync();
       close(true);
