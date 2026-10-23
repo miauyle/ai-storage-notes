@@ -72,6 +72,7 @@ async function checkThemePages(browser, root) {
       await page.locator('#qa-search-result').click();
       await page.waitForURL(root + '/theme/aqua/light/');
       await page.locator('#modeToggle').click();
+      await page.locator('[data-mode-set="dark"]').click();
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForURL(root + '/theme/aqua/dark/');
       assert.equal(await page.locator('html').getAttribute('data-mode'), 'dark');

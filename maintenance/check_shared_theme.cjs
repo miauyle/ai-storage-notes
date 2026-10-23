@@ -50,6 +50,7 @@ async function checkSharedTheme(browser, root, peerRoot) {
         await matches(b, peerRoot, skin, 'light');
       }
       await a.locator('#modeToggle').click();
+      await a.locator('[data-mode-set="dark"]').click();
       await b.waitForFunction(() => document.documentElement.dataset.mode === 'dark');
       await b.reload({ waitUntil: 'networkidle' });
       await matches(b, peerRoot, 'violet', 'dark');
