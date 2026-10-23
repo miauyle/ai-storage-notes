@@ -4,7 +4,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { chromium, webkit } = require('playwright');
 
-async function checkThemeMode(browser, root, userAgent, mobile) {
+async function checkThemeMode(browser, root, userAgent, mobile, diagramRoute) {
   const context = await browser.newContext({ colorScheme: 'light', userAgent,
     viewport: mobile ? { width: 320, height: 720 } : { width: 1280, height: 900 } });
   try {
@@ -61,6 +61,23 @@ async function checkThemeMode(browser, root, userAgent, mobile) {
     assert.ok(await page.locator('[data-mode-set=auto]').evaluate(el => el.getBoundingClientRect().height >= 44));
     fs.mkdirSync('site-qa', { recursive: true });
     await page.screenshot({ path: `site-qa/theme-mode-${browser.browserType().name()}-${mobile ? 'mobile' : 'desktop'}-${userAgent.includes('CriOS') ? 'crios' : userAgent.includes('Chrome') ? 'chrome' : 'safari'}.png` });
+    if (diagramRoute) {
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.goto(root + diagramRoute, { waitUntil: 'networkidle' });
+      await page.locator('.mermaid svg').first().waitFor();
+      const diagram = page.locator('.mermaid').first();
+      const id = await diagram.locator('svg').getAttribute('id');
+      await mode('auto');
+      await page.waitForFunction(before => document.querySelector('.mermaid svg')?.id !== before, id);
+      const fill = () => diagram.locator('.node rect, .node polygon, .node path').first().evaluate(el => getComputedStyle(el).fill);
+      const darkFill = await fill();
+      await page.emulateMedia({ colorScheme: 'light' });
+      await page.waitForFunction(previous => {
+        const el = document.querySelector('.mermaid .node rect, .mermaid .node polygon, .mermaid .node path');
+        return el && getComputedStyle(el).fill !== previous;
+      }, darkFill);
+      assert.notEqual(await fill(), darkFill, 'Mermaid follows system changes in auto mode');
+    }
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
 }
@@ -69,6 +86,22 @@ if (require.main === module) (async () => {
   const base = process.argv[2];
   assert.match(base, /^\/[a-z0-9-]+$/);
   const site = path.resolve('_site');
+  const candidates = [];
+  function findDiagram(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) findDiagram(file);
+      else if (entry.name.endsWith('.html')) {
+        const html = fs.readFileSync(file, 'utf8');
+        const count = (html.match(/class="mermaid"/g) || []).length;
+        const first = html.match(/<div class="mermaid">\s*(flowchart|graph)\b/);
+        if (count && first && html.indexOf(first[0]) === html.indexOf('<div class="mermaid">')) candidates.push({ file, count });
+      }
+    }
+  }
+  findDiagram(path.join(site, 'docs'));
+  candidates.sort((a, b) => a.count - b.count);
+  const diagramRoute = candidates.length ? '/' + path.relative(site, candidates[0].file).split(path.sep).join('/').replace(/index\.html$/, '') : null;
   const mime = { '.css': 'text/css', '.js': 'application/javascript', '.mjs': 'application/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.html': 'text/html' };
   const server = http.createServer((req, res) => {
     const url = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
@@ -91,7 +124,7 @@ if (require.main === module) (async () => {
           ['Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36', false],
           ['Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36', true]
         ] : [[safari, false], [iphone, true], [iphone.replace('Version/18.0', 'CriOS/130.0.0.0'), true]]) {
-          await checkThemeMode(browser, root, ua, mobile);
+          await checkThemeMode(browser, root, ua, mobile, diagramRoute);
         }
       } finally { await browser.close(); }
     }
