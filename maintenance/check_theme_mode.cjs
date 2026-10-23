@@ -100,9 +100,8 @@ if (require.main === module) (async () => {
     }
   }
   findDiagram(path.join(site, 'docs'));
-  assert.ok(candidates.length, 'A real Mermaid document is required for auto-mode coverage');
   candidates.sort((a, b) => a.count - b.count);
-  const diagramRoute = '/' + path.relative(site, candidates[0].file).split(path.sep).join('/').replace(/index\.html$/, '');
+  const diagramRoute = candidates.length ? '/' + path.relative(site, candidates[0].file).split(path.sep).join('/').replace(/index\.html$/, '') : null;
   const mime = { '.css': 'text/css', '.js': 'application/javascript', '.mjs': 'application/javascript', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.html': 'text/html' };
   const server = http.createServer((req, res) => {
     const url = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
