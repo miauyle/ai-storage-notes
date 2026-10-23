@@ -93,6 +93,20 @@ async function checkThemeMode(browser, root, userAgent, mobile, diagramRoute) {
     fs.mkdirSync('site-qa', { recursive: true });
     await page.screenshot({ path: `site-qa/theme-mode-${browser.browserType().name()}-${mobile ? 'mobile' : 'desktop'}-${userAgent.includes('CriOS') ? 'crios' : userAgent.includes('Chrome') ? 'chrome' : 'safari'}.png` });
 
+    // A delayed system event in a resumed tab must not erase a newer choice
+    // already recorded by another tab for the current system color.
+    await page.evaluate(() => {
+      localStorage.setItem('docsteer-mode-system', 'dark');
+      localStorage.setItem('docsteer-mode', 'light');
+    });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.waitForFunction(() => document.documentElement.dataset.mode === 'light');
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    assert.equal(await mode(), 'light');
+    assert.equal(await page.evaluate(() => localStorage.getItem('docsteer-mode')), 'light');
+    await page.emulateMedia({ colorScheme: 'light' });
+    await automatic();
+
     if (diagramRoute) {
       // Restore auto through an actual system change, then verify both palettes.
       await page.emulateMedia({ colorScheme: 'dark' });

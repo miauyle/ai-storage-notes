@@ -32,7 +32,7 @@ function buildThemePages(site, base, icons, profiles, defaultSkin) {
   function inject(html, page, profile) {
     const config = { base, canonical: page.route, profile, paths, skins, defaultSkin };
     html = html.replace(/<script\b[^>]*data-theme-mode-script[^>]*>[\s\S]*?<\/script>\s*/g, '');
-    const routing = `<script src="${base}/assets/js/theme-mode.js?v=3" data-theme-mode-script></script>\n<script id="theme-page-config" type="application/json">${json(config)}</script>\n<script src="${base}/assets/js/${scriptName}"></script>`;
+    const routing = `<script src="${base}/assets/js/theme-mode.js?v=4" data-theme-mode-script></script>\n<script id="theme-page-config" type="application/json">${json(config)}</script>\n<script src="${base}/assets/js/${scriptName}"></script>`;
     // Select the document before declaring any old-profile icon. Keep charset first.
     const charset = /<meta\b[^>]*charset\s*=[^>]*>/i;
     if (charset.test(html)) return html.replace(charset, tag => tag + '\n' + routing);

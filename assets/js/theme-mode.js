@@ -7,7 +7,6 @@
   const systemKey = 'docsteer-mode-system';
   const system = () => media.matches ? 'dark' : 'light';
   const manual = value => value === 'light' || value === 'dark';
-  let seenSystem = system();
   let memory = { mode: 'auto', system: null };
   let storageAvailable = true;
 
@@ -40,11 +39,9 @@
     return mode;
   }
   function reset() {
-    seenSystem = system();
     return apply(save('auto'));
   }
   function sync() {
-    if (seenSystem !== system()) return reset();
     const saved = read();
     // Compare before paint/routing: the system may have changed while no page was open.
     if (manual(saved.mode) && manual(saved.system) && saved.system !== system()) return reset();
@@ -54,8 +51,8 @@
   }
   window.DocSteerAppearance = { sync };
   sync();
-  if (media.addEventListener) media.addEventListener('change', reset);
-  else media.addListener(reset);
+  if (media.addEventListener) media.addEventListener('change', sync);
+  else media.addListener(sync);
   window.addEventListener('storage', event => {
     if (event.key === null || event.key === modeKey || event.key === systemKey) sync();
   });
