@@ -14,14 +14,15 @@
   const paths = new Set(config.paths);
   const prefix = config.base + '/theme/';
   function restore() {
+    const appearance = window.DocSteerAppearance && window.DocSteerAppearance.sync();
     try {
       const skin = localStorage.getItem('docsteer-skin');
-      const mode = localStorage.getItem('docsteer-mode');
+      const mode = appearance || localStorage.getItem('docsteer-mode');
       root.dataset.skin = config.skins.includes(skin) ? skin : (config.profile?.split('/')[0] || config.defaultSkin);
       root.dataset.mode = ['light', 'dark', 'auto'].includes(mode) ? mode : 'auto';
     } catch (_) {
       root.dataset.skin = config.profile?.split('/')[0] || config.defaultSkin;
-      root.dataset.mode = config.profile?.split('/')[1] || 'auto';
+      root.dataset.mode = appearance || config.profile?.split('/')[1] || 'auto';
     }
   }
   function profile() {

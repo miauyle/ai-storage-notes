@@ -6,77 +6,109 @@ const { chromium, webkit } = require('playwright');
 
 async function checkThemeMode(browser, root, userAgent, mobile, diagramRoute) {
   const context = await browser.newContext({ colorScheme: 'light', userAgent,
+    isMobile: mobile, hasTouch: mobile,
     viewport: mobile ? { width: 320, height: 720 } : { width: 1280, height: 900 } });
   try {
-    const page = await context.newPage();
+    let page = await context.newPage();
     const errors = [];
-    page.on('pageerror', error => errors.push(error.message));
-    await page.goto(root + '/', { waitUntil: 'networkidle' });
-    async function mode(value) {
-      await page.locator('#modeToggle').click();
-      await page.locator(`[data-mode-set="${value}"]`).click();
-      assert.equal(await page.locator('html').getAttribute('data-mode'), value);
-      assert.equal(await page.evaluate(() => localStorage.getItem('docsteer-mode')), value);
-      assert.equal(await page.locator(`[data-mode-set="${value}"]`).getAttribute('aria-checked'), 'true');
-    }
+    const watch = p => p.on('pageerror', error => errors.push(error.message));
+    watch(page);
     const bg = () => page.locator('html').evaluate(el => getComputedStyle(el).getPropertyValue('--bg').trim());
-    assert.equal(await page.locator('html').getAttribute('data-mode'), 'auto');
+    const mode = () => page.locator('html').getAttribute('data-mode');
+    async function click(expected) {
+      await page.locator('#modeToggle').click();
+      assert.equal(await mode(), expected);
+      assert.equal(await page.evaluate(() => localStorage.getItem('docsteer-mode')), expected);
+    }
+    async function automatic() {
+      await page.waitForFunction(() => document.documentElement.dataset.mode === 'auto');
+      assert.equal(await page.evaluate(() => localStorage.getItem('docsteer-mode')), null);
+      assert.equal(await page.evaluate(() => localStorage.getItem('docsteer-mode-system')), null);
+    }
+    await page.goto(root + '/', { waitUntil: 'networkidle' });
+    assert.equal(await mode(), 'auto');
+    assert.equal(await page.locator('script[data-theme-mode-script]').count(), 1);
+    assert.equal(await page.locator('#modeToggle > .fa-sun.icon-light').count(), 1);
+    assert.equal(await page.locator('#modeToggle > .fa-moon.icon-dark').count(), 1);
+    assert.equal(await page.locator('#modeToggle').getAttribute('class'), 'navbar__icon-btn');
+    assert.equal(await page.locator('#themeModeMenu, .theme-mode, [href*="theme-mode.css"]').count(), 0);
+    const originalIcons = await page.locator('#modeToggle').innerHTML();
     const light = await bg();
-    await page.emulateMedia({ colorScheme: 'dark' });
+    await click('dark');
+    assert.equal(await page.evaluate(() => localStorage.getItem('docsteer-mode-system')), 'light');
     const dark = await bg();
-    assert.notEqual(light, dark, 'A first visit follows live system changes');
-    await mode('light');
-    assert.equal(await bg(), light);
+    assert.notEqual(light, dark);
     await page.reload({ waitUntil: 'networkidle' });
-    assert.equal(await bg(), light, 'Saved light overrides a dark system after reload');
-    await mode('dark');
-    await page.emulateMedia({ colorScheme: 'light' });
-    assert.equal(await bg(), dark, 'Explicit dark overrides a light system');
-    await mode('auto');
-    assert.equal(await bg(), light);
-    await page.emulateMedia({ colorScheme: 'dark' });
-    assert.equal(await bg(), dark, 'Returning to auto restores live following');
-    await page.reload({ waitUntil: 'networkidle' });
-    assert.equal(await page.locator('html').getAttribute('data-mode'), 'auto');
+    assert.equal(await mode(), 'dark', 'Reload preserves manual choice while system is unchanged');
     assert.equal(await bg(), dark);
-    const peer = await context.newPage();
+    await page.locator('#modeToggle').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await mode(), 'light', 'Original button retains native keyboard interaction');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await automatic();
+    assert.equal(await bg(), dark);
+    await page.emulateMedia({ colorScheme: 'light' });
+    await automatic();
+    assert.equal(await bg(), light);
+
+    // A manual choice matching the current system is still temporary.
+    await click('dark');
+    await click('light');
+    await page.close();
+    page = await context.newPage(); watch(page);
+    await page.emulateMedia({ colorScheme: 'dark' });
+    const navigations = [];
+    page.on('request', request => { if (request.isNavigationRequest()) navigations.push(request.url()); });
+    await page.goto(root + '/?qa=restore#top', { waitUntil: 'networkidle' });
+    await automatic();
+    assert.equal(await bg(), dark, 'A changed system clears a saved override before routing');
+    assert.ok(!navigations.some(url => /\/theme\/[^/]+\/light\//.test(url)), 'No stale light-profile detour');
+    assert.equal(new URL(page.url()).search, '?qa=restore');
+    assert.equal(new URL(page.url()).hash, '#top');
+
+    await page.emulateMedia({ colorScheme: 'light' });
+    await automatic();
+    const peer = await context.newPage(); watch(peer);
     await peer.goto(root + '/', { waitUntil: 'networkidle' });
     const peerURL = peer.url();
-    await mode('light');
-    await peer.waitForFunction(() => document.documentElement.dataset.mode === 'light');
+    await click('dark');
+    await peer.waitForFunction(() => document.documentElement.dataset.mode === 'dark');
     assert.equal(peer.url(), peerURL, 'Passive synchronization does not navigate');
-    await mode('auto');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await automatic();
     await peer.waitForFunction(() => document.documentElement.dataset.mode === 'auto');
-    await page.locator('#modeToggle').focus();
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('End');
-    await page.keyboard.press('Enter');
-    assert.equal(await page.locator('html').getAttribute('data-mode'), 'dark');
-    await page.locator('#modeToggle').click();
-    await page.keyboard.press('Escape');
-    assert.equal(await page.locator('#modeToggle').getAttribute('aria-expanded'), 'false');
-    await page.locator('#modeToggle').click();
-    const rect = await page.locator('#themeModeMenu').boundingBox();
-    assert.ok(rect.x >= 0 && rect.x + rect.width <= (mobile ? 320 : 1280), 'Menu stays inside the viewport');
-    assert.ok(await page.locator('[data-mode-set=auto]').evaluate(el => el.getBoundingClientRect().height >= 44));
+    assert.equal(peer.url(), peerURL);
+    await peer.close();
+
+    // Existing preferences have no system snapshot: migrate without resetting them.
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.evaluate(() => {
+      localStorage.setItem('docsteer-mode', 'dark');
+      localStorage.removeItem('docsteer-mode-system');
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    assert.equal(await mode(), 'dark');
+    assert.equal(await page.evaluate(() => localStorage.getItem('docsteer-mode-system')), 'light');
+    assert.equal(await page.locator('#modeToggle').innerHTML(), originalIcons, 'Original icon markup remains intact');
     fs.mkdirSync('site-qa', { recursive: true });
     await page.screenshot({ path: `site-qa/theme-mode-${browser.browserType().name()}-${mobile ? 'mobile' : 'desktop'}-${userAgent.includes('CriOS') ? 'crios' : userAgent.includes('Chrome') ? 'chrome' : 'safari'}.png` });
+
     if (diagramRoute) {
+      // Restore auto through an actual system change, then verify both palettes.
       await page.emulateMedia({ colorScheme: 'dark' });
+      await automatic();
+      await page.emulateMedia({ colorScheme: 'light' });
       await page.goto(root + diagramRoute, { waitUntil: 'networkidle' });
       await page.locator('.mermaid svg').first().waitFor();
-      const diagram = page.locator('.mermaid').first();
-      const id = await diagram.locator('svg').getAttribute('id');
-      await mode('auto');
-      await page.waitForFunction(before => document.querySelector('.mermaid svg')?.id !== before, id);
-      const fill = () => diagram.locator('.node rect, .node polygon, .node path').first().evaluate(el => getComputedStyle(el).fill);
-      const darkFill = await fill();
-      await page.emulateMedia({ colorScheme: 'light' });
+      const fill = () => page.locator('.mermaid .node rect, .mermaid .node polygon, .mermaid .node path').first().evaluate(el => getComputedStyle(el).fill);
+      const lightFill = await fill();
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await automatic();
       await page.waitForFunction(previous => {
         const el = document.querySelector('.mermaid .node rect, .mermaid .node polygon, .mermaid .node path');
         return el && getComputedStyle(el).fill !== previous;
-      }, darkFill);
-      assert.notEqual(await fill(), darkFill, 'Mermaid follows system changes in auto mode');
+      }, lightFill);
+      assert.notEqual(await fill(), lightFill, 'Mermaid follows automatic system changes');
     }
     assert.deepEqual(errors, []);
   } finally { await context.close(); }
@@ -128,7 +160,7 @@ if (require.main === module) (async () => {
         }
       } finally { await browser.close(); }
     }
-    console.log('Theme modes: Chromium/WebKit desktop/mobile, system changes, manual overrides, auto recovery, reload, storage sync, keyboard and menu layout passed. Browser tab UI requires real-device verification.');
+    console.log('Original theme button: Chromium/WebKit desktop/mobile, temporary overrides, system changes while open/closed, reload, storage sync, legacy migration, keyboard, icons and diagram colors passed. Browser tab UI requires real-device verification.');
   } finally { await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
 module.exports = { checkThemeMode };
